@@ -1,0 +1,5 @@
+#example:
+#Int 5
+#IntSlice 1 2 3 4 5
+#String oh
+#StringSlice oh hi mark
