@@ -35,5 +35,5 @@ func (s *service) Close() error {
 }
 
 func main() {
-	httpservice.InitNewService(thisServiceName, &config{}, false, 1, "publishername")
+	httpservice.InitNewService(thisServiceName, &config{}, false, 1, 1, "publishername")
 }

@@ -35,7 +35,7 @@ type HTTPService interface {
 	Handle(request *suckhttp.Request, logger logger.Logger) (*suckhttp.Response, error)
 }
 
-const pubscheckTicktime time.Duration = time.Second * 5
+const pubscheckTicktime time.Duration = time.Second * 2
 
 // TODO: ПЕРЕЕХАТЬ КОНФИГУРАТОРА НА НОН-ЕПУЛ КОННЕКТОР
 // TODO: придумать шото для неторчащих наружу сервисов

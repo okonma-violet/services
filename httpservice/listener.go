@@ -60,11 +60,9 @@ func (listener *listener) listen(network, address string) error {
 			listener.RUnlock()
 			return nil
 		}
-		listener.RUnlock()
-		listener.stop()
-	} else {
-		listener.RUnlock()
 	}
+	listener.RUnlock()
+	listener.stop()
 
 	listener.Lock()
 	defer listener.Unlock()
@@ -125,6 +123,9 @@ func (listener *listener) acceptWorker() {
 	loop:
 		for {
 			var i time.Duration
+			if !timer.Stop() {
+				<-timer.C
+			}
 			timer.Reset(handlerCallTimeout)
 			select {
 			case <-timer.C:
