@@ -33,6 +33,9 @@ func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservice.Publ
 }
 
 func (s *service) Handle(r *suckhttp.Request, l logger.Logger) (*suckhttp.Response, error) {
+	if r.Uri.Path == "/favicon.ico" {
+		return suckhttp.NewResponse(200, "OK"), nil
+	}
 	req, err := httpservice.CreateHTTPRequest(suckhttp.GET)
 	if err != nil {
 		l.Error("CreateHTTPRequest", err)
