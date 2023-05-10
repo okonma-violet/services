@@ -142,7 +142,7 @@ func (s *services) readSettings(l logger.Logger, settingspath string) error {
 
 		for i := 0; i < len(settings_addrs); i++ { // если остались адреса, еще не присутствующие в системе, мы их добавляем
 			state.rwmux.Lock()
-			newserv := newService(settings_name, *settings_addrs[i], l, s.subs)
+			newserv := newService(settings_name, *settings_addrs[i], l.NewSubLogger(suckutils.ConcatThree(string(settings_name), "-", strconv.Itoa(len(state.connections)))), s.subs)
 			state.connections = append(state.connections, newserv)
 			state.rwmux.Unlock()
 			if newserv.name == ServiceName(configuratortypes.ConfServiceName) {
