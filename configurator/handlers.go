@@ -19,6 +19,9 @@ func (s *service) Handle(message *connector.BasicMessage) error {
 	switch configuratortypes.OperationCode(message.Payload[0]) {
 	case configuratortypes.OperationCodePing:
 		s.l.Debug("New message", "OperationCodePing")
+		if err := s.connector.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodePong)})); err != nil {
+			return err
+		}
 		return nil
 	case configuratortypes.OperationCodeGiveMeOuterAddr:
 		s.l.Debug("New message", "OperationCodeGiveMeOuterAddr")

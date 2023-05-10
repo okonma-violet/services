@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/big-larry/suckhttp"
-	"github.com/okonma-violet/services/httpservice"
+	httpservicenonepoll "github.com/okonma-violet/services/httpservice_nonepoll"
 	"github.com/okonma-violet/services/logs/logger"
 )
 
@@ -20,9 +20,9 @@ type service struct {
 	sync.Mutex
 }
 
-const thisServiceName httpservice.ServiceName = "second"
+const thisServiceName httpservicenonepoll.ServiceName = "second"
 
-func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservice.Publishers_getter) (httpservice.HTTPService, error) {
+func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservicenonepoll.Publishers_getter) (httpservicenonepoll.HTTPService, error) {
 	s := &service{}
 	return s, nil
 }
@@ -43,5 +43,5 @@ func (s *service) Close() error {
 }
 
 func main() {
-	httpservice.InitNewService(thisServiceName, &config{}, false, 5, 5)
+	httpservicenonepoll.InitNewService(thisServiceName, &config{}, false, 5, 5)
 }

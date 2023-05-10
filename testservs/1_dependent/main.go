@@ -5,7 +5,8 @@ import (
 	"errors"
 
 	"github.com/big-larry/suckhttp"
-	"github.com/okonma-violet/services/httpservice"
+
+	httpservicenonepoll "github.com/okonma-violet/services/httpservice_nonepoll"
 	"github.com/okonma-violet/services/logs/logger"
 )
 
@@ -15,16 +16,16 @@ type config struct {
 
 // your shit here
 type service struct {
-	pub_second *httpservice.Publisher
-	pub_third  *httpservice.Publisher
+	pub_second *httpservicenonepoll.Publisher
+	pub_third  *httpservicenonepoll.Publisher
 }
 
-const thisServiceName httpservice.ServiceName = "first"
+const thisServiceName httpservicenonepoll.ServiceName = "first"
 
-const pubname_second httpservice.ServiceName = "second"
-const pubname_third httpservice.ServiceName = "third"
+const pubname_second httpservicenonepoll.ServiceName = "second"
+const pubname_third httpservicenonepoll.ServiceName = "third"
 
-func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservice.Publishers_getter) (httpservice.HTTPService, error) {
+func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservicenonepoll.Publishers_getter) (httpservicenonepoll.HTTPService, error) {
 	s := &service{
 		pub_second: pubs_getter.Get(pubname_second),
 		pub_third:  pubs_getter.Get(pubname_third),
@@ -36,7 +37,7 @@ func (s *service) Handle(r *suckhttp.Request, l logger.Logger) (*suckhttp.Respon
 	if r.Uri.Path == "/favicon.ico" {
 		return suckhttp.NewResponse(200, "OK"), nil
 	}
-	req, err := httpservice.CreateHTTPRequest(suckhttp.GET)
+	req, err := httpservicenonepoll.CreateHTTPRequest(suckhttp.GET)
 	if err != nil {
 		l.Error("CreateHTTPRequest", err)
 		return nil, nil
@@ -70,5 +71,5 @@ func (s *service) Close() error {
 }
 
 func main() {
-	httpservice.InitNewService(thisServiceName, &config{}, false, 5, 5, pubname_second, pubname_third)
+	httpservicenonepoll.InitNewService(thisServiceName, &config{}, false, 5, 5, pubname_second, pubname_third)
 }

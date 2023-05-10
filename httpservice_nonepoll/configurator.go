@@ -1,4 +1,4 @@
-package httpservice
+package httpservicenonepoll
 
 import (
 	"context"
@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/big-larry/suckutils"
-	"github.com/okonma-violet/connector"
+
+	connectornonepoll "github.com/okonma-violet/services/connector_nonepoll"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
 	"github.com/okonma-violet/services/types/netprotocol"
 )
 
 type configurator struct {
-	conn            *connector.EpollReConnector[connector.BasicMessage, *connector.BasicMessage]
+	conn            *connectornonepoll.NonEpollReConnector[connectornonepoll.BasicMessage, *connectornonepoll.BasicMessage]
 	thisServiceName ServiceName
 
 	publishers *publishers
@@ -26,6 +27,10 @@ type configurator struct {
 	terminationByConfigurator chan struct{}
 	l                         logger.Logger
 }
+
+const conf_ReadTimeout time.Duration = time.Second * 5
+const conf_DialTimeout time.Duration = time.Second * 2
+const conf_ReconnectTimeout time.Duration = time.Millisecond * 500
 
 // func newFakeConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceStatus, listener *listener) *configurator {
 // 	connector.InitReconnection(ctx, time.Second*5, 1, 1)
@@ -85,39 +90,15 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 		listener:                  listener,
 		terminationByConfigurator: make(chan struct{}, 1)}
 
-	connector.SetupReconnection(ctx, reconnectTimeout, 1, 1)
-
 	go func() {
-		for {
-			conn, err := net.Dial((configuratoraddr)[:strings.Index(configuratoraddr, ":")], (configuratoraddr)[strings.Index(configuratoraddr, ":")+1:])
-			if err != nil {
-				l.Error("Dial", err)
-				goto timeout
-			}
-
-			if err = c.handshake(conn); err != nil {
-				conn.Close()
-				l.Error("handshake", err)
-				goto timeout
-			}
-			if c.conn, err = connector.NewEpollReConnector[connector.BasicMessage](conn, c, c.handshake, c.afterConnProc); err != nil {
-				l.Error("NewEpollReConnector", err)
-				goto timeout
-			}
-			if err = c.conn.StartServing(); err != nil {
-				c.conn.ClearFromCache()
-				l.Error("StartServing", err)
-				goto timeout
-			}
-			if err = c.afterConnProc(); err != nil {
-				c.conn.Close(err)
-				l.Error("afterConnProc", err)
-				goto timeout
-			}
-			break
-		timeout:
-			l.Debug("First connection", "failed, timeout")
-			time.Sleep(reconnectTimeout)
+		var err error
+		c.conn, err = connectornonepoll.NewNonEpollReConnector[connectornonepoll.BasicMessage](nil, (configuratoraddr)[:strings.Index(configuratoraddr, ":")], (configuratoraddr)[strings.Index(configuratoraddr, ":")+1:],
+			c, conf_DialTimeout, conf_ReconnectTimeout, c.handshake, c.afterConnProc)
+		if err != nil {
+			panic(err)
+		}
+		if err = c.conn.Serve(ctx, conf_ReadTimeout); err != nil {
+			l.Warning("Conn", suckutils.ConcatTwo("serving exited, reason: ", err.Error()))
 		}
 	}()
 
@@ -125,7 +106,7 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 }
 
 func (c *configurator) handshake(conn net.Conn) error {
-	if _, err := conn.Write(connector.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
+	if _, err := conn.Write(connectornonepoll.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
 		return err
 	}
 	buf := make([]byte, 5)
@@ -154,7 +135,7 @@ func (c *configurator) afterConnProc() error {
 	if c.servStatus.onAir() {
 		myStatus = byte(configuratortypes.StatusOn)
 	}
-	if err := c.conn.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), myStatus})); err != nil {
+	if err := c.conn.Send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), myStatus})); err != nil {
 		return err
 	}
 
@@ -166,13 +147,13 @@ func (c *configurator) afterConnProc() error {
 				pub_name_byte := []byte(pub_name)
 				message = append(append(message, byte(len(pub_name_byte))), pub_name_byte...)
 			}
-			if err := c.conn.Send(connector.FormatBasicMessage(message)); err != nil {
+			if err := c.conn.Send(connectornonepoll.FormatBasicMessage(message)); err != nil {
 				return err
 			}
 		}
 	}
 
-	if err := c.conn.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeGiveMeOuterAddr)})); err != nil {
+	if err := c.conn.Send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeGiveMeOuterAddr)})); err != nil {
 		return err
 	}
 	return nil
@@ -183,10 +164,10 @@ func (c *configurator) send(message []byte) error {
 		return errors.New("nil configurator")
 	}
 	if c.conn == nil {
-		return connector.ErrNilConn
+		return connectornonepoll.ErrNilConn
 	}
 	if c.conn.IsClosed() {
-		return connector.ErrClosedConnector
+		return connectornonepoll.ErrClosedConnector
 	}
 	if err := c.conn.Send(message); err != nil {
 		c.conn.Close(err)
@@ -197,22 +178,22 @@ func (c *configurator) send(message []byte) error {
 
 func (c *configurator) onSuspend(reason string) {
 	c.l.Warning("OwnStatus", suckutils.ConcatTwo("suspended, reason: ", reason))
-	c.send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
+	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
 }
 
 func (c *configurator) onUnSuspend() {
 	c.l.Warning("OwnStatus", "unsuspended")
-	c.send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
+	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
 }
 
 // func (c *configurator) NewMessage() connector.MessageReader {
 // 	return connector.NewBasicMessage()
 // }
 
-func (c *configurator) Handle(message *connector.BasicMessage) error {
+func (c *configurator) Handle(message *connectornonepoll.BasicMessage) error {
 	payload := message.Payload
 	if len(payload) == 0 {
-		return connector.ErrEmptyPayload
+		return connectornonepoll.ErrEmptyPayload
 	}
 	switch configuratortypes.OperationCode(payload[0]) {
 	case configuratortypes.OperationCodePing:
@@ -223,10 +204,10 @@ func (c *configurator) Handle(message *connector.BasicMessage) error {
 		return nil
 	case configuratortypes.OperationCodeSetOutsideAddr:
 		if len(payload) < 2 {
-			return connector.ErrWeirdData
+			return connectornonepoll.ErrWeirdData
 		}
 		if len(payload) < 2+int(payload[1]) {
-			return connector.ErrWeirdData
+			return connectornonepoll.ErrWeirdData
 		}
 		if netw, addr, err := configuratortypes.UnformatAddress(payload[2 : 2+int(payload[1])]); err != nil {
 			return err
@@ -261,7 +242,7 @@ func (c *configurator) Handle(message *connector.BasicMessage) error {
 				netw, addr, err := configuratortypes.UnformatAddress(raw_addr)
 				if err != nil {
 					c.l.Error("Handle/OperationCodeUpdatePubs/UnformatAddress", err)
-					return connector.ErrWeirdData
+					return connectornonepoll.ErrWeirdData
 				}
 				if netw == netprotocol.NetProtocolNonlocalUnix {
 					continue // TODO:
@@ -271,10 +252,10 @@ func (c *configurator) Handle(message *connector.BasicMessage) error {
 			}
 			return nil
 		} else {
-			return connector.ErrWeirdData
+			return connectornonepoll.ErrWeirdData
 		}
 	}
-	return connector.ErrWeirdData
+	return connectornonepoll.ErrWeirdData
 }
 
 func (c *configurator) HandleClose(reason error) {
@@ -283,5 +264,6 @@ func (c *configurator) HandleClose(reason error) {
 	} else {
 		c.l.Warning("conn", "conn closed, no reason specified")
 	}
+
 	// в суспенд не уходим, пока у нас есть паблишеры - нам пофиг
 }

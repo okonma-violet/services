@@ -27,6 +27,8 @@ const (
 	// []byte{opcode}
 	OperationCodePing OperationCode = 7
 	// []byte{opcode}
+	OperationCodePong OperationCode = 5
+	// []byte{opcode}
 	OperationCodeOK OperationCode = 1
 	// []byte{opcode}
 	OperationCodeNOTOK OperationCode = 10

@@ -1,4 +1,4 @@
-package httpservice
+package httpservicenonepoll
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/big-larry/suckhttp"
 	"github.com/okonma-violet/confdecoder"
-	"github.com/okonma-violet/connector"
 	"github.com/okonma-violet/services/logs/encode"
 	"github.com/okonma-violet/services/logs/logger"
 )
@@ -56,10 +55,6 @@ func InitNewService(servicename ServiceName, config Servicier, keepConnAlive boo
 
 	servStatus := newServiceStatus()
 
-	connector.SetupEpoll(func(e error) {
-		l.Error("epoll OnWaitError", e)
-		cancel()
-	})
 	// Connector here is only needed for configurator
 	// if err := connector.SetupGopoolHandling(handlethreads, 1, handlethreads); err != nil {
 	// 	panic(err)

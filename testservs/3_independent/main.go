@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/big-larry/suckhttp"
-	"github.com/okonma-violet/services/httpservice"
+
+	httpservicenonepoll "github.com/okonma-violet/services/httpservice_nonepoll"
 	"github.com/okonma-violet/services/logs/logger"
 )
 
@@ -19,9 +20,9 @@ type config struct {
 type service struct {
 }
 
-const thisServiceName httpservice.ServiceName = "third"
+const thisServiceName httpservicenonepoll.ServiceName = "third"
 
-func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservice.Publishers_getter) (httpservice.HTTPService, error) {
+func (c *config) CreateHandler(ctx context.Context, pubs_getter httpservicenonepoll.Publishers_getter) (httpservicenonepoll.HTTPService, error) {
 	s := &service{}
 	return s, nil
 }
@@ -38,7 +39,7 @@ func (s *service) Close() error {
 }
 
 func main() {
-	httpservice.InitNewService(thisServiceName, &config{}, false, 5, 5)
+	httpservicenonepoll.InitNewService(thisServiceName, &config{}, false, 5, 5)
 }
 
 func getMD5(str string) string {
