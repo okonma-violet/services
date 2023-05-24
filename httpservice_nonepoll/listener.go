@@ -92,7 +92,7 @@ loop:
 	go listener.acceptWorker()
 
 	listener.servStatus.setListenerStatus(true)
-	listener.l.Info("listen", suckutils.ConcatFour("start listening at ", network, ":", address))
+	listener.l.Info("listen", suckutils.ConcatTwo("start listening at ", listener.listener.Addr().String()))
 	return nil
 failure:
 	listener.servStatus.setListenerStatus(false)

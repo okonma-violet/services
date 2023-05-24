@@ -126,35 +126,41 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 
 func (c *configurator) handshake(conn net.Conn) error {
 	if _, err := conn.Write(connector.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
+		c.l.Error("Conn/handshake", errors.New(suckutils.ConcatTwo("Write() err: ", err.Error())))
 		return err
 	}
 	buf := make([]byte, 5)
 	conn.SetReadDeadline(time.Now().Add(time.Second * 2))
 	n, err := conn.Read(buf)
 	if err != nil {
+		c.l.Error("Conn/handshake", errors.New(suckutils.ConcatTwo("err reading configurator's approving, err: ", err.Error())))
 		return errors.New(suckutils.ConcatTwo("err reading configurator's approving, err: ", err.Error()))
 	}
 	if n == 5 {
 		if buf[4] == byte(configuratortypes.OperationCodeOK) {
+			c.l.Debug("Conn/handshake", "succesfully (re)connected and handshaked to "+conn.RemoteAddr().String())
 			return nil
 		} else if buf[4] == byte(configuratortypes.OperationCodeNOTOK) {
+			c.l.Error("Conn/handshake", errors.New("configurator do not approve this service"))
 			if c.conn != nil {
+				c.l.Warning("Conn/handshake", ("cancelling reconnect, OperationCodeNOTOK recieved"))
 				go c.conn.CancelReconnect() // горутина пушто этот хэндшейк под залоченным мьютексом выполняется
 			}
 			c.terminationByConfigurator <- struct{}{}
 			return errors.New("configurator do not approve this service")
 		}
 	}
+	c.l.Error("Conn/handshake", errors.New("configurator's approving format not supported or weird"))
 	return errors.New("configurator's approving format not supported or weird")
 }
 
 func (c *configurator) afterConnProc() error {
-
 	myStatus := byte(configuratortypes.StatusSuspended)
 	if c.servStatus.onAir() {
 		myStatus = byte(configuratortypes.StatusOn)
 	}
 	if err := c.conn.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), myStatus})); err != nil {
+		c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 		return err
 	}
 
@@ -167,14 +173,17 @@ func (c *configurator) afterConnProc() error {
 				message = append(append(message, byte(len(pub_name_byte))), pub_name_byte...)
 			}
 			if err := c.conn.Send(connector.FormatBasicMessage(message)); err != nil {
+				c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 				return err
 			}
 		}
 	}
 
 	if err := c.conn.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeGiveMeOuterAddr)})); err != nil {
+		c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 		return err
 	}
+	c.l.Debug("Conn/afterConnProc", "succesfully sended after(re)connect things")
 	return nil
 }
 
@@ -236,7 +245,12 @@ func (c *configurator) Handle(message *connector.BasicMessage) error {
 				c.servStatus.setListenerStatus(true)
 				return nil
 			}
-			if cur_netw, cur_addr := c.listener.Addr(); cur_addr == addr && cur_netw == netw.String() {
+			if netw == netprotocol.NetProtocolTcp {
+				if cur_netw, cur_addr := c.listener.Addr(); cur_addr[strings.LastIndex(cur_addr, ":")+1:] == addr && cur_netw == netw.String() {
+					return nil
+				}
+				addr = suckutils.ConcatTwo(":", addr)
+			} else if cur_netw, cur_addr := c.listener.Addr(); cur_addr == addr && cur_netw == netw.String() {
 				return nil
 			}
 			var err error

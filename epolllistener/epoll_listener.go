@@ -133,5 +133,8 @@ func (listener *EpollListener) IsClosed() bool {
 }
 
 func (listener *EpollListener) Addr() net.Addr {
-	return listener.listener.Addr()
+	if listener.listener != nil {
+		return listener.listener.Addr()
+	}
+	return nil
 }
