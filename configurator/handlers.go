@@ -104,13 +104,18 @@ func (s *service) Handle(message *connector.BasicMessage) error {
 			return errors.New("not configurator, but sent OperationCodeMyOuterPort")
 		}
 	default:
+		s.l.Error("New message", connector.ErrWeirdData)
 		return connector.ErrWeirdData
 	}
 	return nil
 }
 
 func (s *service) HandleClose(reason error) {
-	s.l.Warning("Connection", suckutils.ConcatFour("with \"", string(s.name), "\" closed, reason err: ", reason.Error()))
+	if reason != nil {
+		s.l.Warning("Connection", suckutils.ConcatTwo("closed, reason err: ", reason.Error()))
+	} else {
+		s.l.Warning("Connection", "closed, no reason")
+	}
 	s.changeStatus(configuratortypes.StatusOff)
 
 	if s.name == ServiceName(configuratortypes.ConfServiceName) {

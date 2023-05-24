@@ -26,6 +26,8 @@ func initReconnection(ctx context.Context, ticktime time.Duration, targetbufsize
 	go serveReconnects(ctx, ticktime, targetbufsize)
 }
 
+const reconnection_dial_timeout = time.Millisecond * 500
+
 // библиотечный реконнектор использовать нельзя, ибо он при одновременном реконнекте с двух сторон нас либо мягко задедлочит, либо получатся два разных но работающих подключения (шо весело, конечно)
 // ONLY FOR OTHER CONFIGURATORS RECONNECTION
 func serveReconnects(ctx context.Context, ticktime time.Duration, targetbufsize int) {
@@ -46,7 +48,7 @@ func serveReconnects(ctx context.Context, ticktime time.Duration, targetbufsize 
 						buf[i].l.Error("Reconnect", errors.New("cant reconnect to non-tcp address"))
 						continue
 					}
-					conn, err := net.Dial(buf[i].outerAddr.netw.String(), suckutils.ConcatThree(buf[i].outerAddr.remotehost, ":", buf[i].outerAddr.port))
+					conn, err := (&net.Dialer{Timeout: reconnection_dial_timeout}).Dial(buf[i].outerAddr.netw.String(), suckutils.ConcatThree(buf[i].outerAddr.remotehost, ":", buf[i].outerAddr.port))
 					if err != nil {
 						buf[i].statusmux.Unlock()
 						buf[i].l.Error("Reconnect/Dial", err)
@@ -74,7 +76,7 @@ func serveReconnects(ctx context.Context, ticktime time.Duration, targetbufsize 
 					}
 					buf[i].connector = newcon
 
-					if err = sendUpdateToOuterConf(buf[i]); err != nil {
+					if err = sendOuterConfAfterConnMessages(buf[i]); err != nil {
 						buf[i].statusmux.Unlock()
 						buf[i].l.Error("sendUpdateToOuterConf", err)
 						buf[i].connector.Close(err)
@@ -110,4 +112,18 @@ func handshake(conn net.Conn) error {
 	} else {
 		return errors.New("service's approving format not supported or weird")
 	}
+}
+
+func sendOuterConfAfterConnMessages(serv *service) error {
+	message := append(make([]byte, 0, 15), byte(configuratortypes.OperationCodeSubscribeToServices))
+	if pubnames := serv.subs.getAllPubNames(); len(pubnames) != 0 { // шлем подписку на тошо у нас в пабах есть
+		for _, pub_name := range pubnames {
+			pub_name_byte := []byte(pub_name)
+			message = append(append(message, byte(len(pub_name_byte))), pub_name_byte...)
+		}
+		if err := serv.connector.Send(connector.FormatBasicMessage(message)); err != nil {
+			return err
+		}
+	}
+	return serv.connector.Send(connector.FormatBasicMessage(append(append(make([]byte, 0, len(thisConfOuterPort)+1), byte(configuratortypes.OperationCodeMyOuterPort)), thisConfOuterPort...)))
 }

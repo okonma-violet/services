@@ -84,10 +84,8 @@ func (a *Address) getListeningAddr() (netprotocol.NetProtocol, string, error) {
 			a.port = randport
 		}
 	}
-	if a.netw == netprotocol.NetProtocolUnix || a.netw == netprotocol.NetProtocolNil {
+	if a.netw == netprotocol.NetProtocolUnix || a.netw == netprotocol.NetProtocolNil || a.netw == netprotocol.NetProtocolTcp {
 		return a.netw, a.port, nil
-	} else if a.netw == netprotocol.NetProtocolTcp {
-		return a.netw, suckutils.ConcatTwo("127.0.0.1:", a.port), nil
 	}
 	return 0, "", errors.New("unknown protocol")
 }

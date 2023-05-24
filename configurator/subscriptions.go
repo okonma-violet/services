@@ -16,7 +16,7 @@ import (
 type subscriptions struct {
 	subs_list map[ServiceName][]*service
 	sync.RWMutex
-	services    servicesier
+	servs       *services
 	pubsUpdates chan pubStatusUpdate
 
 	l logger.Logger
@@ -30,11 +30,11 @@ type subscriptionsier interface {
 	getAllPubNames() []ServiceName
 }
 
-func newSubscriptions(ctx context.Context, l logger.Logger, pubsUpdatesQueue int, services servicesier, ownSubscriptions ...ServiceName) *subscriptions {
+func newSubscriptions(ctx context.Context, l logger.Logger, pubsUpdatesQueue int, servs *services, ownSubscriptions ...ServiceName) *subscriptions {
 	if pubsUpdatesQueue == 0 {
 		panic("pubsUpdatesQueue must be > 0")
 	}
-	subs := &subscriptions{subs_list: make(map[ServiceName][]*service), services: services, pubsUpdates: make(chan pubStatusUpdate, pubsUpdatesQueue), l: l}
+	subs := &subscriptions{subs_list: make(map[ServiceName][]*service), servs: servs, pubsUpdates: make(chan pubStatusUpdate, pubsUpdatesQueue), l: l}
 	go subs.pubsUpdatesSendingWorker(ctx)
 	return subs
 }
@@ -134,7 +134,7 @@ func (subs *subscriptions) subscribe(sub *service, pubnames ...ServiceName) erro
 			subs.subs_list[pubname] = append(make([]*service, 1), sub)
 		}
 	sending_pubaddrs_to_sub:
-		if state := subs.services.getServiceState(pubname); state != nil { // getting alive local pubs
+		if state, ok := subs.servs.list[pubname]; ok { // getting alive local pubs
 			addrs := state.getAllOutsideAddrsWithStatus(configuratortypes.StatusOn)
 			if len(addrs) != 0 {
 				for _, addr := range addrs {
@@ -160,10 +160,9 @@ func (subs *subscriptions) subscribe(sub *service, pubnames ...ServiceName) erro
 	subs.Unlock()
 
 	if sendToConfs {
-		if confs_state := subs.services.getServiceState(ServiceName(configuratortypes.ConfServiceName)); confs_state != nil { // sending subscription to other confs
-			confs := confs_state.getAllServices()
-			if len(confs) != 0 {
-				sendToMany(connector.FormatBasicMessage(confs_message), confs)
+		if confs_state, ok := subs.servs.list[ServiceName(configuratortypes.ConfServiceName)]; ok { // sending subscription to other confs
+			if len(confs_state) != 0 {
+				sendToMany(connector.FormatBasicMessage(confs_message), confs_state)
 			}
 		}
 	}

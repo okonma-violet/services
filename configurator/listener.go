@@ -21,9 +21,9 @@ type listener struct {
 type listener_info struct {
 	allowRemote bool
 
-	subs     subscriptionsier
-	services servicesier
-	l        logger.Logger
+	subs  subscriptionsier
+	servs *services
+	l     logger.Logger
 }
 
 type listenier interface {
@@ -32,9 +32,9 @@ type listenier interface {
 
 // суть разделения на внешний и локальный листенер - юникс по локалке. а так - конфигуратору сейчас до пизды, если к внешнему листнеру подрубается локальный сервис (и я не особо вижу смысл вешать ограничение)
 
-func newListener(network, address string, allowRemote bool, subs subscriptionsier, services servicesier, l logger.Logger) (listenier, error) {
+func newListener(network, address string, allowRemote bool, subs subscriptionsier, servs *services, l logger.Logger) (listenier, error) {
 
-	lninfo := &listener_info{allowRemote: allowRemote, subs: subs, services: services, l: l}
+	lninfo := &listener_info{allowRemote: allowRemote, subs: subs, servs: servs, l: l}
 	ln, err := epolllistener.EpollListen(network, address, lninfo)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func newListener(network, address string, allowRemote bool, subs subscriptionsie
 		ln.ClearFromCache()
 		return nil, err
 	}
-	lninfo.l.Info("Listener", suckutils.ConcatFour("start listening at ", network, ":", address))
+	lninfo.l.Info("Listener", suckutils.ConcatTwo("start listening at ", ln.Addr().String()))
 	lstnr := &listener{ln: ln}
 	return lstnr, nil
 }
@@ -75,8 +75,8 @@ func (lninfo *listener_info) HandleNewConn(conn net.Conn) {
 	}
 	name := ServiceName(buf)
 
-	state := lninfo.services.getServiceState(name)
-	if state == nil {
+	state, ok := lninfo.servs.list[name]
+	if !ok {
 		lninfo.l.Warning("HandleNewConn", suckutils.Concat("unknown service trying to connect: ", string(name)))
 		conn.Close()
 		return

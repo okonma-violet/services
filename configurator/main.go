@@ -9,12 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/big-larry/suckutils"
 	"github.com/okonma-violet/confdecoder"
 	"github.com/okonma-violet/connector"
 	"github.com/okonma-violet/dynamicworkerspool"
 	"github.com/okonma-violet/services/epolllistener"
 	"github.com/okonma-violet/services/logs/encode"
 	"github.com/okonma-violet/services/logs/logger"
+	"github.com/okonma-violet/services/types/netprotocol"
 )
 
 type config struct {
@@ -26,7 +28,6 @@ type config struct {
 const connectors_min_threads int = 1
 const connectors_max_threads int = 5
 const threadkilling_timeout time.Duration = time.Second * 5
-const settingsCheckTicktime time.Duration = time.Second * 5
 const reconnectsCheckTicktime time.Duration = time.Second * 10
 const reconnectsTargetBufSize int = 4
 
@@ -61,27 +62,32 @@ func main() {
 
 	subs := newSubscriptions(ctx, l, 5, nil)
 
-	servs := newServices(ctx, l, conf.Settings, settingsCheckTicktime, subs)
-	subs.services = servs
+	servs := newServices(l.NewSubLogger("services"), conf.Settings, subs)
+	subs.servs = servs
 
 	var local_ln, external_ln listenier
 	var allow_remote_on_local_ln bool
 
 	if conf.ListenExternal != "" {
+		if netprotocol.NetProtocolTcp.String() != conf.ListenExternal[:strings.Index(conf.ListenExternal, ":")] {
+			panic("specified netprotocol for ListenExternal must be tcp")
+		}
 		if conf.ListenExternal != conf.ListenLocal {
-			if external_ln, err = newListener((conf.ListenExternal)[:strings.Index(conf.ListenExternal, ":")], (conf.ListenExternal)[strings.Index(conf.ListenExternal, ":")+1:], true, subs, servs, l); err != nil {
-				l.Error("newListener remote", err)
-				cancel()
+			if external_ln, err = newListener(conf.ListenExternal[:strings.Index(conf.ListenExternal, ":")], conf.ListenExternal[strings.LastIndex(conf.ListenExternal, ":"):], true, subs, servs, l); err != nil {
+				panic("newListener remote err: " + err.Error())
 			}
-			thisConfOuterPort = []byte((conf.ListenExternal)[strings.LastIndex(conf.ListenExternal, ":")+1:])
+			thisConfOuterPort = []byte(conf.ListenExternal[strings.LastIndex(conf.ListenExternal, ":")+1:])
 		} else {
-			thisConfOuterPort = []byte((conf.ListenLocal)[strings.LastIndex(conf.ListenLocal, ":")+1:])
+			thisConfOuterPort = []byte(conf.ListenLocal[strings.LastIndex(conf.ListenLocal, ":")+1:])
 			allow_remote_on_local_ln = true
 		}
 	}
-
-	if local_ln, err = newListener((conf.ListenLocal)[:strings.Index(conf.ListenLocal, ":")], (conf.ListenLocal)[strings.Index(conf.ListenLocal, ":")+1:], allow_remote_on_local_ln, subs, servs, l); err != nil {
-		panic("newListener local: " + err.Error())
+	localaddr := conf.ListenLocal[strings.Index(conf.ListenLocal, ":")+1:]
+	if netprotocol.NetProtocolTcp.String() == conf.ListenLocal[:strings.Index(conf.ListenLocal, ":")] {
+		localaddr = suckutils.ConcatTwo(":", localaddr)
+	}
+	if local_ln, err = newListener(conf.ListenLocal[:strings.Index(conf.ListenLocal, ":")], localaddr, allow_remote_on_local_ln, subs, servs, l); err != nil {
+		panic("newListener local err: " + err.Error())
 	}
 
 	<-ctx.Done()
