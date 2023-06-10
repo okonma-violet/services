@@ -2,6 +2,7 @@ package httpservice
 
 import (
 	"context"
+	"flag"
 	"net"
 	"os"
 	"os/signal"
@@ -48,6 +49,9 @@ func InitNewService(servicename ServiceName, config Servicier, keepConnAlive boo
 	if servconf.ConfiguratorAddr == "" {
 		panic("ConfiguratorAddr in config.txt not specified")
 	}
+
+	flag.IntVar(&handlethreads, "thr", handlethreads, "rewrites built threads num")
+	flag.Parse()
 
 	ctx, cancel := createContextWithInterruptSignal()
 

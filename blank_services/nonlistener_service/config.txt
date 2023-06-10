@@ -1,0 +1,7 @@
+#example:
+#Int 5
+#IntSlice 1 2 3 4 5
+#String oh
+#StringSlice oh hi mark
+
+ConfiguratorAddr tcp:127.0.0.1:8099

@@ -34,7 +34,7 @@ func NewNonEpollConnector[Tmessage any,
 	return connector, nil
 }
 
-// run in a routine / readTimeout must not be zero / readTimeout shots -> checks ctx / closes conn on return
+// run inside a routine / readTimeout must not be zero / readTimeout shots -> checks ctx / closes conn on return
 func (connector *NonEpollConnector[Tm, PTm]) Serve(ctx context.Context, readTimeout time.Duration) error {
 	if connector.IsClosed() {
 		return ErrClosedConnector

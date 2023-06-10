@@ -2,6 +2,7 @@ package httpservicenonepoll
 
 import (
 	"context"
+	"flag"
 	"net"
 	"os"
 	"os/signal"
@@ -36,9 +37,6 @@ type HTTPService interface {
 
 const pubscheckTicktime time.Duration = time.Second * 2
 
-// TODO: ПЕРЕЕХАТЬ КОНФИГУРАТОРА НА НОН-ЕПУЛ КОННЕКТОР
-// TODO: придумать шото для неторчащих наружу сервисов
-
 func InitNewService(servicename ServiceName, config Servicier, keepConnAlive bool, handlethreads, connsbuf int, publishers_names ...ServiceName) {
 	servconf := &config_toml{}
 	if err := confdecoder.DecodeFile("config.txt", servconf, config); err != nil {
@@ -47,6 +45,9 @@ func InitNewService(servicename ServiceName, config Servicier, keepConnAlive boo
 	if servconf.ConfiguratorAddr == "" {
 		panic("ConfiguratorAddr in config.txt not specified")
 	}
+
+	flag.IntVar(&handlethreads, "thr", handlethreads, "rewrites built threads num")
+	flag.Parse()
 
 	ctx, cancel := createContextWithInterruptSignal()
 

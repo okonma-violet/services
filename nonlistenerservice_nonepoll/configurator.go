@@ -1,9 +1,10 @@
-package httpservicenonepoll
+package nonlistenerservice_nonepoll
 
 import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 
 	"strings"
 	"time"
@@ -21,26 +22,29 @@ type configurator struct {
 	thisServiceName ServiceName
 
 	publishers *publishers
-	listener   *listener
 	servStatus *serviceStatus
 
+	execut *executor
+
 	terminationByConfigurator chan struct{}
-	l                         logger.Logger
+	termmux                   sync.Mutex
+
+	l logger.Logger
 }
 
 const conf_ReadTimeout time.Duration = time.Second * 5
 const conf_DialTimeout time.Duration = time.Second * 2
-const conf_ReconnectTimeout time.Duration = time.Millisecond * 500
+const conf_ReconnectTimeout time.Duration = time.Second * 2
 
-func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceStatus, pubs *publishers, listener *listener, configuratoraddr string, thisServiceName ServiceName, reconnectTimeout time.Duration) *configurator {
+func newConfigurator(ctx context.Context, l logger.Logger, execut *executor, servStatus *serviceStatus, pubs *publishers, configuratoraddr string, thisServiceName ServiceName, reconnectTimeout time.Duration) *configurator {
 
 	c := &configurator{
 		thisServiceName:           thisServiceName,
 		l:                         l,
 		servStatus:                servStatus,
 		publishers:                pubs,
-		listener:                  listener,
-		terminationByConfigurator: make(chan struct{}, 1)}
+		execut:                    execut,
+		terminationByConfigurator: make(chan struct{})}
 
 	go func() {
 		conn, err := net.Dial((configuratoraddr)[:strings.Index(configuratoraddr, ":")], (configuratoraddr)[strings.Index(configuratoraddr, ":")+1:])
@@ -72,6 +76,35 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 	return c
 }
 
+func (c *configurator) send(message []byte) error {
+	if c == nil {
+		return errors.New("nil configurator")
+	}
+	if c.conn == nil {
+		return connectornonepoll.ErrNilConn
+	}
+	if c.conn.IsClosed() {
+		return connectornonepoll.ErrClosedConnector
+	}
+	if err := c.conn.Send(message); err != nil {
+		c.conn.Close(err)
+		return err
+	}
+	return nil
+}
+
+func (c *configurator) onSuspend(reason string) {
+	c.l.Warning("OwnStatus", suckutils.ConcatTwo("suspended, reason: ", reason))
+	c.execut.cancel()
+	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
+}
+
+func (c *configurator) onUnSuspend() {
+	c.l.Info("OwnStatus", "unsuspended")
+	c.execut.run()
+	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
+}
+
 func (c *configurator) handshake(conn net.Conn) error {
 	if _, err := conn.Write(connectornonepoll.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
 		c.l.Error("Conn/handshake", errors.New(suckutils.ConcatTwo("Write() err: ", err.Error())))
@@ -94,7 +127,7 @@ func (c *configurator) handshake(conn net.Conn) error {
 				c.l.Warning("Conn/handshake", ("cancelling reconnect, OperationCodeNOTOK recieved"))
 				go c.conn.CancelReconnect() // горутина пушто этот хэндшейк под залоченным мьютексом выполняется
 			}
-			c.terminationByConfigurator <- struct{}{}
+			c.terminateByConf()
 			return errors.New("configurator do not approve this service")
 		}
 	}
@@ -135,37 +168,6 @@ func (c *configurator) afterConnProc() error {
 	return nil
 }
 
-func (c *configurator) send(message []byte) error {
-	if c == nil {
-		return errors.New("nil configurator")
-	}
-	if c.conn == nil {
-		return connectornonepoll.ErrNilConn
-	}
-	if c.conn.IsClosed() {
-		return connectornonepoll.ErrClosedConnector
-	}
-	if err := c.conn.Send(message); err != nil {
-		c.conn.Close(err)
-		return err
-	}
-	return nil
-}
-
-func (c *configurator) onSuspend(reason string) {
-	c.l.Warning("OwnStatus", suckutils.ConcatTwo("suspended, reason: ", reason))
-	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
-}
-
-func (c *configurator) onUnSuspend() {
-	c.l.Warning("OwnStatus", "unsuspended")
-	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
-}
-
-// func (c *configurator) NewMessage() connector.MessageReader {
-// 	return connector.NewBasicMessage()
-// }
-
 func (c *configurator) Handle(message *connectornonepoll.BasicMessage) error {
 	payload := message.Payload
 	if len(payload) == 0 {
@@ -185,36 +187,15 @@ func (c *configurator) Handle(message *connectornonepoll.BasicMessage) error {
 		if len(payload) < 2+int(payload[1]) {
 			return connectornonepoll.ErrWeirdData
 		}
-		if netw, addr, err := configuratortypes.UnformatAddress(payload[2 : 2+int(payload[1])]); err != nil {
+		if netw, _, err := configuratortypes.UnformatAddress(payload[2 : 2+int(payload[1])]); err != nil {
 			return err
 		} else {
 			if netw == netprotocol.NetProtocolNil {
-				c.listener.stop()
-				c.servStatus.setListenerStatus(true)
+				c.servStatus.setAllowedByConf(true)
 				return nil
-			}
-			if netw == netprotocol.NetProtocolTcp {
-				if cur_netw, cur_addr := c.listener.Addr(); cur_addr[strings.LastIndex(cur_addr, ":")+1:] == addr && cur_netw == netw.String() {
-					return nil
-				}
-				addr = suckutils.ConcatTwo(":", addr)
-			} else if netw == netprotocol.NetProtocolUnix {
-				if cur_netw, cur_addr := c.listener.Addr(); cur_addr == addr && cur_netw == netw.String() {
-					return nil
-				}
 			} else {
 				return errors.New(suckutils.ConcatTwo("unsupportable ln addr protocol: ", netw.String()))
 			}
-			var err error
-			for i := 0; i < 3; i++ {
-				if err = c.listener.listen(netw.String(), addr); err != nil {
-					c.listener.l.Error("listen", err)
-					time.Sleep(time.Second)
-				} else {
-					return nil
-				}
-			}
-			return err
 		}
 	case configuratortypes.OperationCodeUpdatePubs:
 		updates := configuratortypes.SeparatePayload(payload[1:])
@@ -251,4 +232,20 @@ func (c *configurator) HandleClose(reason error) {
 	}
 
 	// в суспенд не уходим, пока у нас есть паблишеры - нам пофиг
+}
+
+func (c *configurator) terminateByConf() {
+	c.termmux.Lock()
+	defer c.termmux.Unlock()
+
+	select {
+	case <-c.terminationByConfigurator:
+		return
+	default:
+		close(c.terminationByConfigurator)
+	}
+}
+
+func (c *configurator) terminated() <-chan struct{} {
+	return c.terminationByConfigurator
 }

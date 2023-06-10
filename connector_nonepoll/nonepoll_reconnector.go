@@ -32,10 +32,6 @@ type Addr struct {
 	address string
 }
 
-type connectable interface {
-	connect() (succeeded bool)
-}
-
 func NewNonEpollReConnector[Tmessage any, PTmessage interface {
 	Readable
 	*Tmessage
@@ -65,7 +61,7 @@ func NewNonEpollReConnector[Tmessage any, PTmessage interface {
 	return reconn, nil
 }
 
-// run in a routine
+// run inside a routine
 func (recon *NonEpollReConnector[Tm, PTm]) Serve(ctx context.Context, readTimeout time.Duration) error {
 	dialer := &net.Dialer{Timeout: recon.dialTimeout}
 
@@ -82,8 +78,8 @@ func (recon *NonEpollReConnector[Tm, PTm]) Serve(ctx context.Context, readTimeou
 				if recon.connector == nil || recon.connector.IsClosed() {
 					conn, err := dialer.Dial(recon.reconAddr.netw, recon.reconAddr.address)
 					if err != nil {
-						time.Sleep(recon.reconnectTimeout)
 						recon.mux.Unlock()
+						time.Sleep(recon.reconnectTimeout)
 						continue // не логается
 					}
 					if recon.doOnDial != nil {
@@ -113,6 +109,7 @@ func (recon *NonEpollReConnector[Tm, PTm]) Serve(ctx context.Context, readTimeou
 				}
 				recon.mux.Unlock()
 				recon.connector.Serve(ctx, readTimeout)
+				time.Sleep(recon.reconnectTimeout) // чтобы не было долбежки реконнектами успешными
 			}
 		}
 	}

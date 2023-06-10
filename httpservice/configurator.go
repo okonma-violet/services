@@ -250,8 +250,12 @@ func (c *configurator) Handle(message *connector.BasicMessage) error {
 					return nil
 				}
 				addr = suckutils.ConcatTwo(":", addr)
-			} else if cur_netw, cur_addr := c.listener.Addr(); cur_addr == addr && cur_netw == netw.String() {
-				return nil
+			} else if netw == netprotocol.NetProtocolUnix {
+				if cur_netw, cur_addr := c.listener.Addr(); cur_addr == addr && cur_netw == netw.String() {
+					return nil
+				}
+			} else {
+				return errors.New(suckutils.ConcatTwo("unsupportable ln addr protocol: ", netw.String()))
 			}
 			var err error
 			for i := 0; i < 3; i++ {

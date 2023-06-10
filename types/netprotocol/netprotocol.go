@@ -26,9 +26,24 @@ func (np NetProtocol) String() string {
 	case NetProtocolNonlocalUnix:
 		return "nonlocalunix"
 	}
-	return ""
+	return "unknown(" + strconv.Itoa(int(np)) + ")"
 }
 
+func FromString(str string) NetProtocol {
+	switch str {
+	case "tcp":
+		return NetProtocolTcp
+	case "unix":
+		return NetProtocolUnix
+	case "nil":
+		return NetProtocolNil
+	case "nonlocalunix":
+		return NetProtocolNonlocalUnix
+	}
+	return 0
+}
+
+// for tcp checks port too
 func (np NetProtocol) Verify(addr string) bool {
 	switch np {
 	case NetProtocolTcp:
