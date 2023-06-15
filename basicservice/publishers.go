@@ -1,4 +1,4 @@
-package nonlistenerservice_nonepoll
+package basicservice
 
 import (
 	"context"
@@ -73,7 +73,6 @@ func (pubs *publishers) update(pubname ServiceName, netw, addr string, status co
 }
 
 func (pubs *publishers) publishersWorker(ctx context.Context, servStatus *serviceStatus, pubscheckTicktime time.Duration) {
-	time.Sleep(time.Second * 2)
 	ticker := time.NewTicker(pubscheckTicktime)
 loop:
 	for {
@@ -113,7 +112,7 @@ loop:
 							continue loop
 
 						} else if update.status == configuratortypes.StatusOn { // если нужно добавлять в список адресов = ошибка, но может ложно стрельнуть при старте сервиса, когда при подключении к конфигуратору запрос на апдейт помимо хендшейка может отправить эта горутина по тикеру
-							pubs.l.Debug("publishersWorker", suckutils.Concat("recieved pubupdate to status_on for already updated status_on for \"", string(update.name), "\" from ", update.addr.addr))
+							pubs.l.Error("publishersWorker", errors.New(suckutils.Concat("recieved pubupdate to status_on for already updated status_on for \"", string(update.name), "\" from ", update.addr.addr)))
 							continue loop
 
 						} else { // если кривой апдейт
@@ -133,7 +132,7 @@ loop:
 					continue loop
 
 				} else if update.status == configuratortypes.StatusOff || update.status == configuratortypes.StatusSuspended { // если нужно удалять из списка адресов = ошибка
-					pubs.l.Warning("publishersWorker", suckutils.Concat("recieved pubupdate to status_suspend/off for already updated status_suspend/off for \"", string(update.name), "\" from ", update.addr.addr))
+					pubs.l.Error("publishersWorker", errors.New(suckutils.Concat("recieved pubupdate to status_suspend/off for already updated status_suspend/off for \"", string(update.name), "\" from ", update.addr.addr)))
 					continue loop
 
 				} else { // если кривой апдейт = ошибка
@@ -239,34 +238,6 @@ func CreateHTTPRequest(method suckhttp.HttpMethod) (*suckhttp.Request, error) {
 	return suckhttp.NewRequest(method, "")
 }
 
-func (pub *Publisher) SendHTTP(request *suckhttp.Request) (response *suckhttp.Response, err error) {
-	pub.mux.Lock()
-	defer pub.mux.Unlock()
-	if pub.conn != nil {
-		response, err = request.Send(context.Background(), pub.conn)
-		pub.conn.Close()
-	}
-	if pub.conn == nil || err != nil {
-		if err != nil {
-			pub.l.Error("Send", err)
-		} else {
-			//pub.l.Debug("Conn", "not connected, reconnect")
-		}
-		if err = pub.connect(); err == nil {
-			defer func() {
-				pub.conn.Close()
-				pub.conn = nil
-			}()
-			if response, err = request.Send(context.Background(), pub.conn); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return response, nil
-}
-
 func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMessage, timeout time.Duration) (response *basicmessage.BasicMessage, err error) {
 	pub.mux.Lock()
 	defer pub.mux.Unlock()
@@ -299,6 +270,34 @@ func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMes
 
 func (pub *Publisher) SendBasicMessage(message *basicmessage.BasicMessage) (*basicmessage.BasicMessage, error) {
 	return pub.SendBasicMessageWithTimeout(message, time.Minute)
+}
+
+func (pub *Publisher) SendHTTP(request *suckhttp.Request) (response *suckhttp.Response, err error) {
+	pub.mux.Lock()
+	defer pub.mux.Unlock()
+	if pub.conn != nil {
+		response, err = request.Send(context.Background(), pub.conn)
+		pub.conn.Close()
+	}
+	if pub.conn == nil || err != nil {
+		if err != nil {
+			pub.l.Error("Send", err)
+		} else {
+			//pub.l.Debug("Conn", "not connected, reconnect")
+		}
+		if err = pub.connect(); err == nil {
+			defer func() {
+				pub.conn.Close()
+				pub.conn = nil
+			}()
+			if response, err = request.Send(context.Background(), pub.conn); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+	return response, nil
 }
 
 // no mutex inside

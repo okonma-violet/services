@@ -10,30 +10,30 @@ type OperationCode byte
 
 const (
 	// []byte{opcode, statuscode}
-	OperationCodeMyStatusChanged OperationCode = 2
+	OperationCodeMyStatusChanged OperationCode = 1
 	// []byte{opcode, len(pubname), pubname, len(pubname), pubname, ...}
-	OperationCodeUnsubscribeFromServices OperationCode = 3
+	OperationCodeUnsubscribeFromServices OperationCode = 2
 	// []byte{opcode, len(pubname), pubname, len(pubname), pubname, ...}
-	OperationCodeSubscribeToServices OperationCode = 4
+	OperationCodeSubscribeToServices OperationCode = 3
 	// message := []byte{opcode, len(pubinfo), pubinfo, len(pubinfo), pubinfo, ...}
 	// pubinfo := []byte{statuscode, len(addr), addr, pubname},
-	OperationCodeUpdatePubs OperationCode = 6
+	OperationCodeUpdatePubs OperationCode = 4
 	// []byte{opcode}
-	OperationCodeGiveMeOuterAddr OperationCode = 8
+	OperationCodeGiveMeOuterAddr OperationCode = 5
 	// []byte{opcode, len(addr), addr}
-	OperationCodeSetOutsideAddr OperationCode = 9
+	OperationCodeSetOutsideAddr OperationCode = 6
 	// []byte{opcode}
-	OperationCodeImSupended OperationCode = 5
+	OperationCodeImSupended OperationCode = 7
 	// []byte{opcode}
-	OperationCodePing OperationCode = 7
+	OperationCodePing OperationCode = 8
 	// []byte{opcode}
-	OperationCodePong OperationCode = 5
+	OperationCodePong OperationCode = 9
 	// []byte{opcode}
-	OperationCodeOK OperationCode = 1
+	OperationCodeOK OperationCode = 10
 	// []byte{opcode}
-	OperationCodeNOTOK OperationCode = 10
+	OperationCodeNOTOK OperationCode = 11
 	// []byte{opcode, port}
-	OperationCodeMyOuterPort OperationCode = 11
+	OperationCodeMyOuterPort OperationCode = 12
 )
 
 func (op OperationCode) String() string {

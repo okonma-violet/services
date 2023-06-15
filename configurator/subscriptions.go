@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/big-larry/suckutils"
-	"github.com/okonma-violet/connector"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
 	"github.com/okonma-violet/services/types/netprotocol"
@@ -65,13 +65,13 @@ func (subs *subscriptions) pubsUpdatesSendingWorker(ctx context.Context) {
 				payload := configuratortypes.ConcatPayload(configuratortypes.FormatOpcodeUpdatePubMessage(update.servicename, update.address, update.status))
 				message := append(append(make([]byte, 0, len(payload)+1), byte(configuratortypes.OperationCodeUpdatePubs)), payload...)
 				if update.sendToConfs {
-					sendToMany(connector.FormatBasicMessage(message), subscriptors)
+					sendToMany(basicmessage.FormatBasicMessage(message), subscriptors)
 				} else {
 					for _, subscriptor := range subscriptors {
 						if subscriptor == nil || subscriptor.connector == nil || subscriptor.connector.IsClosed() || subscriptor.name == ServiceName(configuratortypes.ConfServiceName) {
 							continue
 						}
-						if err := subscriptor.connector.Send(connector.FormatBasicMessage(message)); err != nil {
+						if err := subscriptor.connector.Send(basicmessage.FormatBasicMessage(message)); err != nil {
 							subscriptor.connector.Close(err)
 						}
 					}
@@ -162,7 +162,7 @@ func (subs *subscriptions) subscribe(sub *service, pubnames ...ServiceName) erro
 	if sendToConfs {
 		if confs_state, ok := subs.servs.list[ServiceName(configuratortypes.ConfServiceName)]; ok { // sending subscription to other confs
 			if len(confs_state) != 0 {
-				sendToMany(connector.FormatBasicMessage(confs_message), confs_state)
+				sendToMany(basicmessage.FormatBasicMessage(confs_message), confs_state)
 			}
 		}
 	}
@@ -171,7 +171,7 @@ func (subs *subscriptions) subscribe(sub *service, pubnames ...ServiceName) erro
 		updateinfos := configuratortypes.ConcatPayload(formatted_updateinfos...)
 		message := append(make([]byte, 1, len(updateinfos)+1), updateinfos...)
 		message[0] = byte(configuratortypes.OperationCodeUpdatePubs)
-		return sub.connector.Send(connector.FormatBasicMessage(message))
+		return sub.connector.Send(basicmessage.FormatBasicMessage(message))
 	}
 	return nil
 }

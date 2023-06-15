@@ -7,11 +7,12 @@ import (
 
 	"github.com/big-larry/suckutils"
 	"github.com/okonma-violet/connector"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/types/configuratortypes"
 	"github.com/okonma-violet/services/types/netprotocol"
 )
 
-func (s *service) Handle(message *connector.BasicMessage) error {
+func (s *service) Handle(message *basicmessage.BasicMessage) error {
 
 	if len(message.Payload) == 0 {
 		return connector.ErrEmptyPayload
@@ -19,7 +20,7 @@ func (s *service) Handle(message *connector.BasicMessage) error {
 	switch configuratortypes.OperationCode(message.Payload[0]) {
 	case configuratortypes.OperationCodePing:
 		s.l.Debug("New message", "OperationCodePing")
-		if err := s.connector.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodePong)})); err != nil {
+		if err := s.connector.Send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodePong)})); err != nil {
 			return err
 		}
 		return nil
@@ -29,7 +30,7 @@ func (s *service) Handle(message *connector.BasicMessage) error {
 			return errors.New(suckutils.ConcatTwo("getlisteningaddr err: ", err.Error()))
 		} else {
 			formatted_addr := configuratortypes.FormatAddress(netw, addr)
-			if err := s.connector.Send(connector.FormatBasicMessage(append(append(make([]byte, 0, len(formatted_addr)+2), byte(configuratortypes.OperationCodeSetOutsideAddr), byte(len(formatted_addr))), formatted_addr...))); err != nil {
+			if err := s.connector.Send(basicmessage.FormatBasicMessage(append(append(make([]byte, 0, len(formatted_addr)+2), byte(configuratortypes.OperationCodeSetOutsideAddr), byte(len(formatted_addr))), formatted_addr...))); err != nil {
 				return err
 			}
 			return nil

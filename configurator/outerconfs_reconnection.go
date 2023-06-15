@@ -8,6 +8,7 @@ import (
 
 	"github.com/big-larry/suckutils"
 	"github.com/okonma-violet/connector"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/types/configuratortypes"
 	"github.com/okonma-violet/services/types/netprotocol"
 )
@@ -61,7 +62,7 @@ func serveReconnects(ctx context.Context, ticktime time.Duration, targetbufsize 
 						continue
 					}
 
-					newcon, err := connector.NewEpollConnector[connector.BasicMessage](conn, buf[i])
+					newcon, err := connector.NewEpollConnector[basicmessage.BasicMessage](conn, buf[i])
 					if err != nil {
 						buf[i].statusmux.Unlock()
 						buf[i].l.Error("Reconnect/NewEpollConnector", err)
@@ -98,7 +99,7 @@ func serveReconnects(ctx context.Context, ticktime time.Duration, targetbufsize 
 }
 
 func handshake(conn net.Conn) error {
-	if _, err := conn.Write(connector.FormatBasicMessage([]byte(configuratortypes.ConfServiceName))); err != nil {
+	if _, err := conn.Write(basicmessage.FormatBasicMessage([]byte(configuratortypes.ConfServiceName))); err != nil {
 		return err
 	}
 	buf := make([]byte, 5)
@@ -121,9 +122,9 @@ func sendOuterConfAfterConnMessages(serv *service) error {
 			pub_name_byte := []byte(pub_name)
 			message = append(append(message, byte(len(pub_name_byte))), pub_name_byte...)
 		}
-		if err := serv.connector.Send(connector.FormatBasicMessage(message)); err != nil {
+		if err := serv.connector.Send(basicmessage.FormatBasicMessage(message)); err != nil {
 			return err
 		}
 	}
-	return serv.connector.Send(connector.FormatBasicMessage(append(append(make([]byte, 0, len(thisConfOuterPort)+1), byte(configuratortypes.OperationCodeMyOuterPort)), thisConfOuterPort...)))
+	return serv.connector.Send(basicmessage.FormatBasicMessage(append(append(make([]byte, 0, len(thisConfOuterPort)+1), byte(configuratortypes.OperationCodeMyOuterPort)), thisConfOuterPort...)))
 }

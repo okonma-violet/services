@@ -11,6 +11,7 @@ import (
 	"github.com/big-larry/suckutils"
 	"github.com/okonma-violet/confdecoder"
 	"github.com/okonma-violet/connector"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
 )
@@ -114,7 +115,7 @@ func (state service_state) initNewConnection(conn net.Conn, isLocalhosted bool, 
 					goto failure
 				}
 			}
-			if con, err = connector.NewEpollConnector[connector.BasicMessage](conn, state[i]); err != nil {
+			if con, err = connector.NewEpollConnector[basicmessage.BasicMessage](conn, state[i]); err != nil {
 				state[i].l.Error("Connection/NewEpollConnector", err)
 				goto failure
 			}
@@ -140,7 +141,7 @@ func (state service_state) initNewConnection(conn net.Conn, isLocalhosted bool, 
 		}
 		state[i].l.Debug("Connection", "service approved, serving started")
 		state[i].statusmux.Unlock()
-		if err := con.Send(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeOK)})); err != nil {
+		if err := con.Send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeOK)})); err != nil {
 			state[i].connector.Close(err)
 			return err
 		}
@@ -158,7 +159,7 @@ func (state service_state) initNewConnection(conn net.Conn, isLocalhosted bool, 
 	// 		*loggs,
 	// 	))
 	// }
-	conn.Write(connector.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeNOTOK)}))
+	conn.Write(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeNOTOK)}))
 	return errors.New("no free conns for this service available")
 }
 
