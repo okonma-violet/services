@@ -1,4 +1,4 @@
-package basicservice
+package universalservice_nonepoll
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type flagger interface {
 }
 
 type Closer interface {
-	Close() error
+	Close(logger.Logger) error
 }
 
 type config_base struct {
@@ -30,8 +30,8 @@ type config_base struct {
 
 const pubscheckTicktime time.Duration = time.Second * 2
 
-// TODO: ПЕРЕЕХАТЬ КОНФИГУРАТОРА НА НОН-ЕПУЛ КОННЕКТОР
-// TODO: придумать шото для неторчащих наружу сервисов
+// NON-EPOLL.
+// example of usage: ../blank_services/universalservice/
 
 func InitNewService(servicename ServiceName, config HandleCreator, handlethreads int, publishers_names ...ServiceName) {
 	servconf := &config_base{}
@@ -96,8 +96,8 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	ln.close()
 
 	if clsr != nil {
-		if err = clsr.Close(); err != nil {
-			l.Error("Handler.Closer", err)
+		if err = clsr.Close(l.NewSubLogger("Closer")); err != nil {
+			l.Error("Closer", err)
 		}
 	}
 

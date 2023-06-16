@@ -1,4 +1,4 @@
-package basicservice
+package universalservice_nonepoll
 
 import (
 	"context"
@@ -88,11 +88,11 @@ func (listener *listener) listen(network, address string) error {
 	go listener.acceptWorker(subctx)
 
 	listener.servStatus.setListenerStatus(true)
-	listener.l.Info("listen", suckutils.ConcatTwo("start listening at ", ln.Addr().String()))
+	listener.l.Info("listener", suckutils.ConcatTwo("start listening at ", ln.Addr().String()))
 	return nil
 failure:
 	listener.servStatus.setListenerStatus(false)
-	listener.l.Error("listen", errors.New(suckutils.Concat("unable to listen to ", network, ":", address, " error: ", err.Error())))
+	listener.l.Error("listener", errors.New(suckutils.Concat("unable to listen to ", network, ":", address, " error: ", err.Error())))
 	listener.subctxcancel()
 	listener.ln = nil
 	return err

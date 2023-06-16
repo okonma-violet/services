@@ -1,4 +1,4 @@
-package basicservice
+package universalservice_nonepoll
 
 import (
 	"context"
@@ -238,6 +238,7 @@ func CreateHTTPRequest(method suckhttp.HttpMethod) (*suckhttp.Request, error) {
 	return suckhttp.NewRequest(method, "")
 }
 
+// example of usage: sending long-handled requests
 func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMessage, timeout time.Duration) (response *basicmessage.BasicMessage, err error) {
 	pub.mux.Lock()
 	defer pub.mux.Unlock()

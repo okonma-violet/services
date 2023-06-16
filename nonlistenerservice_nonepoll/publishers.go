@@ -267,6 +267,7 @@ func (pub *Publisher) SendHTTP(request *suckhttp.Request) (response *suckhttp.Re
 	return response, nil
 }
 
+// example of usage: sending long-handled requests
 func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMessage, timeout time.Duration) (response *basicmessage.BasicMessage, err error) {
 	pub.mux.Lock()
 	defer pub.mux.Unlock()

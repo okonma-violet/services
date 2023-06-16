@@ -1,4 +1,4 @@
-package basicservice
+package universalservice_nonepoll
 
 import (
 	"context"
@@ -17,13 +17,21 @@ type HandleCreator interface {
 	PrepareHandling(ctx context.Context, pubs_getter Publishers_getter) (BaseHandleFunc, Closer, error)
 }
 
-func CreateHTTPHandleFunc(hf func(*suckhttp.Request, logger.Logger) (*suckhttp.Response, error)) BaseHandleFunc {
+type httpmsghandler interface {
+	HandleHTTP(*suckhttp.Request, logger.Logger) (*suckhttp.Response, error)
+}
+
+type basicmsghandler interface {
+	HandleBasic(*basicmessage.BasicMessage, logger.Logger) (*basicmessage.BasicMessage, error)
+}
+
+func CreateHTTPHandleFunc(h httpmsghandler) BaseHandleFunc {
 	return func(l logger.Logger, conn net.Conn) error {
 		request, err := suckhttp.ReadRequest(context.Background(), conn, time.Minute)
 		if err != nil {
 			return err
 		}
-		response, err := hf(request, l)
+		response, err := h.HandleHTTP(request, l)
 		if response == nil {
 			response = suckhttp.NewResponse(500, "Internal Server Error")
 		}
@@ -37,13 +45,13 @@ func CreateHTTPHandleFunc(hf func(*suckhttp.Request, logger.Logger) (*suckhttp.R
 	}
 }
 
-func CreateBasicHandleFunc(hf func(*basicmessage.BasicMessage, logger.Logger) (*basicmessage.BasicMessage, error)) BaseHandleFunc {
+func CreateBasicHandleFunc(h basicmsghandler) BaseHandleFunc {
 	return func(l logger.Logger, conn net.Conn) error {
 		requestmsg, err := basicmessage.ReadMessage(conn, time.Minute) //suckhttp.ReadRequest(context.Background(), conn, time.Minute)
 		if err != nil {
 			return err
 		}
-		responsemsg, err := hf(requestmsg, l)
+		responsemsg, err := h.HandleBasic(requestmsg, l)
 		if responsemsg == nil {
 			responsemsg = &basicmessage.BasicMessage{Payload: []byte{byte(basicmessagetypes.OperationCodeInternalServerError)}}
 		}

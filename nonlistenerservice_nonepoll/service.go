@@ -26,7 +26,7 @@ type flagger interface {
 }
 
 type closer interface {
-	Close() error
+	Close(logger.Logger) error
 }
 
 type config_serv struct {
@@ -121,8 +121,8 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 	}
 
 	if closehandler, ok := workersdata.(closer); ok {
-		if err = closehandler.Close(); err != nil {
-			l.Error("Handler.Closer", err)
+		if err = closehandler.Close(l.NewSubLogger("Closer")); err != nil {
+			l.Error("Closer", err)
 		}
 	}
 
