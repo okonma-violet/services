@@ -74,7 +74,6 @@ func (listener *listener) listen(network, address string) error {
 	subctx, listener.subctxcancel = context.WithCancel(listener.rootctx)
 
 	var err error
-	var ln net.Listener
 	if network == "unix" {
 		if err = os.RemoveAll(address); err != nil {
 			goto failure
@@ -86,9 +85,8 @@ func (listener *listener) listen(network, address string) error {
 	}
 
 	go listener.acceptWorker(subctx)
-
 	listener.servStatus.setListenerStatus(true)
-	listener.l.Info("listener", suckutils.ConcatTwo("start listening at ", ln.Addr().String()))
+	listener.l.Info("listener", suckutils.ConcatTwo("start listening at ", listener.ln.Addr().String()))
 	return nil
 failure:
 	listener.servStatus.setListenerStatus(false)

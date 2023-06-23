@@ -20,7 +20,7 @@ type config struct {
 
 // your shit here
 type service struct {
-	pub universalservice_nonepoll.Publisher
+	pub *universalservice_nonepoll.Publisher
 }
 
 const thisServiceName universalservice_nonepoll.ServiceName = "example"
@@ -31,7 +31,7 @@ func (c *config) InitFlags() {
 }
 
 func (c *config) PrepareHandling(ctx context.Context, pubs_getter universalservice_nonepoll.Publishers_getter) (universalservice_nonepoll.BaseHandleFunc, universalservice_nonepoll.Closer, error) {
-	s := &service{pub: *pubs_getter.Get(examplePubName)}
+	s := &service{pub: pubs_getter.Get(examplePubName)}
 	return universalservice_nonepoll.CreateHTTPHandleFunc(s), s, nil
 	return universalservice_nonepoll.CreateBasicHandleFunc(s), s, nil
 }

@@ -11,7 +11,7 @@ import (
 
 	"github.com/big-larry/suckhttp"
 	"github.com/big-larry/suckutils"
-	"github.com/okonma-violet/connector"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
 )
@@ -146,7 +146,7 @@ loop:
 
 				pubname_byte := []byte(update.name)
 				message := append(append(make([]byte, 0, 2+len(update.name)), byte(configuratortypes.OperationCodeUnsubscribeFromServices), byte(len(pubname_byte))), pubname_byte...)
-				if err := pubs.configurator.send(connector.FormatBasicMessage(message)); err != nil {
+				if err := pubs.configurator.send(basicmessage.FormatBasicMessage(message)); err != nil {
 					pubs.l.Error("publishersWorker/configurator.Send", err)
 				}
 			}
@@ -174,7 +174,7 @@ loop:
 					//check pubname len?
 					message = append(append(message, byte(len(pubname))), []byte(pubname)...)
 				}
-				if err := pubs.configurator.send(connector.FormatBasicMessage(message)); err != nil {
+				if err := pubs.configurator.send(basicmessage.FormatBasicMessage(message)); err != nil {
 					pubs.l.Error("Publishers", errors.New(suckutils.ConcatTwo("sending subscription to configurator error: ", err.Error())))
 				}
 			} else {

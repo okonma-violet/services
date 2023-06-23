@@ -10,6 +10,7 @@ import (
 
 	"github.com/big-larry/suckutils"
 
+	"github.com/okonma-violet/services/basicmessage"
 	connectornonepoll "github.com/okonma-violet/services/connector_nonepoll"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
@@ -17,7 +18,7 @@ import (
 )
 
 type configurator struct {
-	conn            *connectornonepoll.NonEpollReConnector[connectornonepoll.BasicMessage, *connectornonepoll.BasicMessage]
+	conn            *connectornonepoll.NonEpollReConnector[basicmessage.BasicMessage, *basicmessage.BasicMessage]
 	thisServiceName ServiceName
 
 	publishers *publishers
@@ -54,7 +55,7 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 			}
 		}
 
-		c.conn, err = connectornonepoll.NewNonEpollReConnector[connectornonepoll.BasicMessage](conn, (configuratoraddr)[:strings.Index(configuratoraddr, ":")], (configuratoraddr)[strings.Index(configuratoraddr, ":")+1:],
+		c.conn, err = connectornonepoll.NewNonEpollReConnector[basicmessage.BasicMessage](conn, (configuratoraddr)[:strings.Index(configuratoraddr, ":")], (configuratoraddr)[strings.Index(configuratoraddr, ":")+1:],
 			c, conf_DialTimeout, conf_ReconnectTimeout, c.handshake, c.afterConnProc)
 		if err != nil {
 			panic(err)
@@ -73,7 +74,7 @@ func newConfigurator(ctx context.Context, l logger.Logger, servStatus *serviceSt
 }
 
 func (c *configurator) handshake(conn net.Conn) error {
-	if _, err := conn.Write(connectornonepoll.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
+	if _, err := conn.Write(basicmessage.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
 		c.l.Error("Conn/handshake", errors.New(suckutils.ConcatTwo("Write() err: ", err.Error())))
 		return err
 	}
@@ -107,7 +108,7 @@ func (c *configurator) afterConnProc() error {
 	if c.servStatus.onAir() {
 		myStatus = byte(configuratortypes.StatusOn)
 	}
-	if err := c.conn.Send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), myStatus})); err != nil {
+	if err := c.conn.Send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), myStatus})); err != nil {
 		c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 		return err
 	}
@@ -120,14 +121,14 @@ func (c *configurator) afterConnProc() error {
 				pub_name_byte := []byte(pub_name)
 				message = append(append(message, byte(len(pub_name_byte))), pub_name_byte...)
 			}
-			if err := c.conn.Send(connectornonepoll.FormatBasicMessage(message)); err != nil {
+			if err := c.conn.Send(basicmessage.FormatBasicMessage(message)); err != nil {
 				c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 				return err
 			}
 		}
 	}
 
-	if err := c.conn.Send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeGiveMeOuterAddr)})); err != nil {
+	if err := c.conn.Send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeGiveMeOuterAddr)})); err != nil {
 		c.l.Error("Conn/afterConnProc", errors.New(suckutils.ConcatTwo("Send() err: ", err.Error())))
 		return err
 	}
@@ -154,19 +155,19 @@ func (c *configurator) send(message []byte) error {
 
 func (c *configurator) onSuspend(reason string) {
 	c.l.Warning("OwnStatus", suckutils.ConcatTwo("suspended, reason: ", reason))
-	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
+	c.send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusSuspended)}))
 }
 
 func (c *configurator) onUnSuspend() {
 	c.l.Warning("OwnStatus", "unsuspended")
-	c.send(connectornonepoll.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
+	c.send(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeMyStatusChanged), byte(configuratortypes.StatusOn)}))
 }
 
 // func (c *configurator) NewMessage() connector.MessageReader {
 // 	return connector.NewBasicMessage()
 // }
 
-func (c *configurator) Handle(message *connectornonepoll.BasicMessage) error {
+func (c *configurator) Handle(message *basicmessage.BasicMessage) error {
 	payload := message.Payload
 	if len(payload) == 0 {
 		return connectornonepoll.ErrEmptyPayload
