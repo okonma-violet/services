@@ -31,7 +31,6 @@ func NewFlusher(logsflushlvl encode.LogsFlushLevel /*, nonlocal bool*/) LogsFlus
 }
 
 func (f *Flusher) flushWorker() {
-	//println("THIS") ////////////////////
 	for {
 		select {
 		case logslist := <-f.ch:
