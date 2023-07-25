@@ -176,9 +176,10 @@ func (listener *listener) close() {
 	listener.Lock()
 	defer listener.Unlock()
 
-	listener.ln.Close()
-	listener.l.Debug("Close/ln", "succesfully closed")
-
+	if listener.ln != nil {
+		listener.ln.Close()
+		listener.l.Debug("Close/ln", "succesfully closed")
+	}
 	if listener.pool != nil {
 		listener.pool.Close()
 		listener.l.Debug("Close/pool", "closing pool")

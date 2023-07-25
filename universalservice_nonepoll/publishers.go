@@ -33,11 +33,11 @@ type publishers struct {
 }
 
 type Publisher struct {
-	conn        net.Conn
+	//conn        net.Conn
 	servicename ServiceName
 	addresses   []address
 	current_ind int
-	mux         sync.Mutex
+	mux         sync.RWMutex
 	l           logger.Logger
 }
 
@@ -55,6 +55,10 @@ type pubupdate struct {
 	status configuratortypes.ServiceStatus
 }
 
+var dialer *net.Dialer
+
+const dialtimeout time.Duration = time.Second * 5
+
 // call before configurator created
 func newPublishers(ctx context.Context, l logger.Logger, servStatus *serviceStatus, configurator *configurator, pubscheckTicktime time.Duration, pubNames []ServiceName) (*publishers, error) {
 	p := &publishers{configurator: configurator, l: l, list: make(map[ServiceName]*Publisher, len(pubNames)), pubupdates: make(chan pubupdate, 1)}
@@ -63,6 +67,7 @@ func newPublishers(ctx context.Context, l logger.Logger, servStatus *serviceStat
 			return nil, err
 		}
 	}
+	dialer = &net.Dialer{Timeout: dialtimeout}
 	go p.publishersWorker(ctx, servStatus, pubscheckTicktime)
 	return p, nil
 
@@ -73,6 +78,7 @@ func (pubs *publishers) update(pubname ServiceName, netw, addr string, status co
 }
 
 func (pubs *publishers) publishersWorker(ctx context.Context, servStatus *serviceStatus, pubscheckTicktime time.Duration) {
+	time.Sleep(time.Second)
 	ticker := time.NewTicker(pubscheckTicktime)
 loop:
 	for {
@@ -95,12 +101,12 @@ loop:
 							pub.mux.Lock()
 
 							pub.addresses = append(pub.addresses[:i], pub.addresses[i+1:]...)
-							if pub.conn != nil {
-								if pub.conn.RemoteAddr().String() == update.addr.addr {
-									pub.conn.Close()
-									pubs.l.Debug("publishersWorker", suckutils.ConcatFour("due to update, closed conn to \"", string(update.name), "\" from ", update.addr.addr))
-								}
-							}
+							// if pub.conn != nil {
+							// 	if pub.conn.RemoteAddr().String() == update.addr.addr {
+							// 		pub.conn.Close()
+							// 		pubs.l.Debug("publishersWorker", suckutils.ConcatFour("due to update, closed conn to \"", string(update.name), "\" from ", update.addr.addr))
+							// 	}
+							// }
 
 							if pub.current_ind > i {
 								pub.current_ind--
@@ -108,11 +114,11 @@ loop:
 
 							pub.mux.Unlock()
 
-							pubs.l.Debug("publishersWorker", suckutils.Concat("pub \"", string(update.name), "\" from ", update.addr.addr, " updated to", update.status.String()))
+							pubs.l.Debug("publishersWorker", suckutils.Concat("pub \"", string(update.name), "\" from ", update.addr.addr, " updated to ", update.status.String()))
 							continue loop
 
-						} else if update.status == configuratortypes.StatusOn { // если нужно добавлять в список адресов = ошибка, но может ложно стрельнуть при старте сервиса, когда при подключении к конфигуратору запрос на апдейт помимо хендшейка может отправить эта горутина по тикеру
-							pubs.l.Error("publishersWorker", errors.New(suckutils.Concat("recieved pubupdate to status_on for already updated status_on for \"", string(update.name), "\" from ", update.addr.addr)))
+						} else if update.status == configuratortypes.StatusOn { // если нужно добавлять в список адресов = варнинг, но может ложно стрельнуть при старте сервиса, когда при подключении к конфигуратору запрос на апдейт помимо хендшейка может отправить эта горутина по тикеру
+							pubs.l.Warning("publishersWorker", suckutils.Concat("recieved pubupdate to status_on for already updated status_on for \"", string(update.name), "\" from ", update.addr.addr))
 							continue loop
 
 						} else { // если кривой апдейт
@@ -238,90 +244,54 @@ func CreateHTTPRequest(method suckhttp.HttpMethod) (*suckhttp.Request, error) {
 	return suckhttp.NewRequest(method, "")
 }
 
-// example of usage: sending long-handled requests
-func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMessage, timeout time.Duration) (response *basicmessage.BasicMessage, err error) {
-	pub.mux.Lock()
-	defer pub.mux.Unlock()
-	if pub.conn != nil {
-		_, err = pub.conn.Write(message.ToByte())
-	}
-	if pub.conn == nil || err != nil {
-		if err != nil {
-			pub.conn.Close()
-			pub.l.Error("Send", err)
-		} else {
-			//pub.l.Debug("Conn", "not connected, reconnect")
-		}
-		if err = pub.connect(); err == nil {
-			if _, err = pub.conn.Write(message.ToByte()); err != nil {
-				pub.conn.Close()
-				pub.conn = nil
-				pub.l.Error("Send", err)
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-	if response, err = basicmessage.ReadMessage(pub.conn, timeout); err != nil {
+func (pub *Publisher) SendHTTP(request *suckhttp.Request) (*suckhttp.Response, error) {
+	var conn net.Conn
+	var err error
+	if conn, err = pub.connect(); err != nil {
 		return nil, err
 	}
-	return response, nil
+	defer conn.Close()
+
+	return request.Send(context.Background(), conn)
+}
+
+// example of usage: sending long-handled requests
+func (pub *Publisher) SendBasicMessageWithTimeout(message *basicmessage.BasicMessage, timeout time.Duration) (*basicmessage.BasicMessage, error) {
+	var conn net.Conn
+	var err error
+	if conn, err = pub.connect(); err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if _, err = conn.Write(message.ToByte()); err != nil {
+		// pub.l.Error("Send", err)
+		return nil, err
+	}
+	return basicmessage.ReadMessage(conn, timeout)
 }
 
 func (pub *Publisher) SendBasicMessage(message *basicmessage.BasicMessage) (*basicmessage.BasicMessage, error) {
 	return pub.SendBasicMessageWithTimeout(message, time.Minute)
 }
 
-func (pub *Publisher) SendHTTP(request *suckhttp.Request) (response *suckhttp.Response, err error) {
-	pub.mux.Lock()
-	defer pub.mux.Unlock()
-	if pub.conn != nil {
-		response, err = request.Send(context.Background(), pub.conn)
-		pub.conn.Close()
-	}
-	if pub.conn == nil || err != nil {
-		if err != nil {
-			pub.l.Error("Send", err)
-		} else {
-			//pub.l.Debug("Conn", "not connected, reconnect")
-		}
-		if err = pub.connect(); err == nil {
-			defer func() {
-				pub.conn.Close()
-				pub.conn = nil
-			}()
-			if response, err = request.Send(context.Background(), pub.conn); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return response, nil
-}
+func (pub *Publisher) connect() (net.Conn, error) {
+	pub.mux.RLock()
+	defer pub.mux.RUnlock()
 
-// no mutex inside
-func (pub *Publisher) connect() error {
-	if pub.conn != nil {
-		pub.conn.Close()
-		pub.conn = nil
-	}
-
+	var conn net.Conn
+	var err error
 	for i := 0; i < len(pub.addresses); i++ {
 		if pub.current_ind == len(pub.addresses) {
 			pub.current_ind = 0
 		}
-		var err error
-		if pub.conn, err = net.DialTimeout(pub.addresses[pub.current_ind].netw, pub.addresses[pub.current_ind].addr, time.Second); err != nil {
+		if conn, err = dialer.Dial(pub.addresses[pub.current_ind].netw, pub.addresses[pub.current_ind].addr); err != nil {
 			pub.l.Error("connect/Dial", err)
 			pub.current_ind++
 		} else {
-			goto success
+			pub.l.Debug("connect/Dial", suckutils.ConcatTwo("Connected to ", conn.RemoteAddr().String()))
+			return conn, nil
 		}
 	}
-	return errors.New("no available addresses")
-success:
-	pub.l.Info("Conn", suckutils.ConcatTwo("Connected to ", pub.conn.RemoteAddr().String()))
-	return nil
+	return nil, errors.New("no available/alive pub's addresses")
 }

@@ -39,7 +39,7 @@ type NLService interface {
 	DoJob(routinectx context.Context, logger logger.Logger) error
 }
 
-const pubscheckTicktime time.Duration = time.Second * 2
+const pubscheckTicktime time.Duration = time.Second * 6
 
 // Want to use flags - write func InitFlags() for Servicier.
 // Want to closefunc on exit - write func Close() for NLService

@@ -28,7 +28,7 @@ type config_base struct {
 	ConfiguratorAddr string
 }
 
-const pubscheckTicktime time.Duration = time.Second * 2
+const pubscheckTicktime time.Duration = time.Second * 6
 
 // NON-EPOLL.
 // example of usage: ../blank_services/universalservice/
