@@ -219,7 +219,7 @@ func (pubs *publishers) newPublisher(name ServiceName) (*Publisher, error) {
 	}
 
 	if _, ok := pubs.list[name]; !ok {
-		p := &Publisher{servicename: name, addresses: make([]address, 0, 1), l: pubs.l}
+		p := &Publisher{servicename: name, addresses: make([]address, 0, 1), l: pubs.l.NewSubLogger(string(name))}
 		pubs.list[name] = p
 		return p, nil
 	} else {

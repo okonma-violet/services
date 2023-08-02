@@ -87,7 +87,7 @@ func PrintLog(log []byte) {
 }
 
 func Println(logtype byte, log string) {
-	println(LogType(logtype).Colorize(), log)
+	println(suckutils.Concat(LogType(logtype).Colorize(), string(TagStartSep), LogType(logtype).String(), string(TagEndSep), ColorWhite, time.Now().Format(time_layout), log))
 }
 
 func GetLogLvl(log []byte) LogsFlushLevel {
