@@ -41,7 +41,7 @@ func (lt LogType) ByteStr() []byte {
 
 const (
 	ColorReset = "\033[0m"
-	ColorWhite = "\033[97m"
+	ColorWhite = "\033[0m" //"\033[97m"
 )
 
 func (lt LogType) Colorize() string {
