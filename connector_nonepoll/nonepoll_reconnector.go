@@ -110,6 +110,9 @@ func (recon *NonEpollReConnector[Tm, PTm]) Serve(ctx context.Context, readTimeou
 				recon.mux.Unlock()
 				recon.connector.Serve(ctx, readTimeout)
 				time.Sleep(recon.reconnectTimeout) // чтобы не было долбежки реконнектами успешными
+			} else {
+				recon.mux.Unlock()
+				return ErrStopped
 			}
 		}
 	}

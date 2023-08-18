@@ -10,6 +10,7 @@ var ErrWeirdData error = errors.New("weird data")
 var ErrEmptyPayload error = errors.New("empty payload")
 var ErrConnClosedByOtherSide error = errors.New("conn closed by other side")
 var ErrContextDone error = errors.New("context done")
+var ErrStopped error = errors.New("reconnection stopped")
 var ErrClosedConnector error = errors.New("closed connector")
 var ErrNilConn error = errors.New("conn is nil")
 
