@@ -39,8 +39,6 @@ type NLService interface {
 	DoJob(routinectx context.Context, logger logger.Logger) error
 }
 
-const pubscheckTicktime time.Duration = time.Second * 6
-
 // Want to use flags - write func InitFlags() for Servicier.
 // Want to closefunc on exit - write func Close() for NLService
 func InitNewService(servicename ServiceName, config Servicier, workthreads int, publishers_names ...ServiceName) {
@@ -86,7 +84,7 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 		servStatus := newServiceStatus()
 		var pubs *publishers
 		if len(publishers_names) != 0 {
-			if pubs, err = newPublishers(ctx, l.NewSubLogger("pubs"), servStatus, nil, pubscheckTicktime, publishers_names); err != nil {
+			if pubs, err = newPublishers(l.NewSubLogger("pubs"), servStatus, publishers_names); err != nil {
 				panic(err)
 			}
 		} else {
@@ -98,9 +96,7 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 		}
 		execut = newExecutor(ctx, l, workthreads, workersdata)
 		cnfgr = newConfigurator(ctx, l.NewSubLogger("configurator"), execut, servStatus, pubs, servconf.ConfiguratorAddr, servicename, time.Second*5)
-		if pubs != nil {
-			pubs.configurator = cnfgr
-		}
+
 		servStatus.setOnSuspendFunc(cnfgr.onSuspend)
 		servStatus.setOnUnSuspendFunc(cnfgr.onUnSuspend)
 	}

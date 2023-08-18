@@ -28,8 +28,6 @@ type config_base struct {
 	ConfiguratorAddr string
 }
 
-const pubscheckTicktime time.Duration = time.Second * 6
-
 // NON-EPOLL.
 // example of usage: ../blank_services/universalservice/
 
@@ -62,7 +60,7 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	var pubs *publishers
 	var err error
 	if len(publishers_names) != 0 {
-		if pubs, err = newPublishers(ctx, l.NewSubLogger("pubs"), servStatus, nil, pubscheckTicktime, publishers_names); err != nil {
+		if pubs, err = newPublishers(l.NewSubLogger("pubs"), servStatus, publishers_names); err != nil {
 			panic(err)
 		}
 	} else {
@@ -76,9 +74,6 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	ln := newListener(ctx, l, servStatus, handlethreads, handler)
 
 	configurator := newConfigurator(ctx, l.NewSubLogger("configurator"), servStatus, pubs, ln, servconf.ConfiguratorAddr, servicename, time.Second*5)
-	if pubs != nil {
-		pubs.configurator = configurator
-	}
 
 	//ln.configurator = configurator
 	servStatus.setOnSuspendFunc(configurator.onSuspend)

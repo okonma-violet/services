@@ -73,6 +73,9 @@ func newConfigurator(ctx context.Context, l logger.Logger, execut *executor, ser
 			l.Warning("Conn", suckutils.ConcatTwo("serving exited, reason: ", err.Error()))
 		}
 	}()
+	if pubs != nil {
+		pubs.servePublishers(ctx, c)
+	}
 
 	return c
 }

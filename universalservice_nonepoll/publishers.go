@@ -25,11 +25,13 @@ type address struct {
 
 type publishers struct {
 	list       map[ServiceName]*Publisher
-	mux        sync.Mutex
 	pubupdates chan pubupdate
 
+	servstatus   *serviceStatus
 	configurator *configurator
 	l            logger.Logger
+
+	//mux sync.Mutex
 }
 
 type Publisher struct {
@@ -45,9 +47,9 @@ type Publishers_getter interface {
 	Get(name ServiceName) *Publisher
 }
 
-type Publisher_Sender interface {
-	SendHTTP(request *suckhttp.Request) (response *suckhttp.Response, err error)
-}
+// type Publisher_Sender interface {
+// 	SendHTTP(request *suckhttp.Request) (response *suckhttp.Response, err error)
+// }
 
 type pubupdate struct {
 	name   ServiceName
@@ -58,27 +60,35 @@ type pubupdate struct {
 var dialer *net.Dialer
 
 const dialtimeout time.Duration = time.Second * 5
+const pubscheckTicktime time.Duration = time.Second * 6
 
-// call before configurator created
-func newPublishers(ctx context.Context, l logger.Logger, servStatus *serviceStatus, configurator *configurator, pubscheckTicktime time.Duration, pubNames []ServiceName) (*publishers, error) {
-	p := &publishers{configurator: configurator, l: l, list: make(map[ServiceName]*Publisher, len(pubNames)), pubupdates: make(chan pubupdate, 1)}
+func newPublishers(l logger.Logger, servStatus *serviceStatus, pubNames []ServiceName) (*publishers, error) {
+	p := &publishers{
+		l:          l,
+		list:       make(map[ServiceName]*Publisher, len(pubNames)),
+		pubupdates: make(chan pubupdate, 1),
+		servstatus: servStatus,
+	}
 	for _, pubname := range pubNames {
 		if _, err := p.newPublisher(pubname); err != nil {
 			return nil, err
 		}
 	}
-	dialer = &net.Dialer{Timeout: dialtimeout}
-	go p.publishersWorker(ctx, servStatus, pubscheckTicktime)
 	return p, nil
 
+}
+
+func (pubs *publishers) servePublishers(ctx context.Context, configurator *configurator) {
+	pubs.configurator = configurator
+	dialer = &net.Dialer{Timeout: dialtimeout}
+	go pubs.publishersWorker(ctx)
 }
 
 func (pubs *publishers) update(pubname ServiceName, netw, addr string, status configuratortypes.ServiceStatus) {
 	pubs.pubupdates <- pubupdate{name: pubname, addr: address{netw: netw, addr: addr}, status: status}
 }
 
-func (pubs *publishers) publishersWorker(ctx context.Context, servStatus *serviceStatus, pubscheckTicktime time.Duration) {
-	time.Sleep(time.Second)
+func (pubs *publishers) publishersWorker(ctx context.Context) {
 	ticker := time.NewTicker(pubscheckTicktime)
 loop:
 	for {
@@ -87,11 +97,11 @@ loop:
 			pubs.l.Debug("publishersWorker", "context done, exiting")
 			return
 		case update := <-pubs.pubupdates:
-			pubs.mux.Lock()
+			// pubs.mux.Lock()
 			// чешем мапу
 			if pub, ok := pubs.list[update.name]; ok {
 				// если есть в мапе
-				pubs.mux.Unlock()
+				// pubs.mux.Unlock()
 				// чешем список адресов
 				for i := 0; i < len(pub.addresses); i++ {
 					// если нашли в списке адресов
@@ -147,7 +157,7 @@ loop:
 				}
 
 			} else { // если нет в мапе = ошибка и отписка
-				pubs.mux.Unlock()
+				// pubs.mux.Unlock()
 				pubs.l.Error("publishersWorker", errors.New(suckutils.Concat("recieved update for non-publisher \"", string(update.name), "\", sending unsubscription")))
 
 				pubname_byte := []byte(update.name)
@@ -160,7 +170,7 @@ loop:
 			empty_pubs := make([]string, 0, 1)
 			empty_pubs_len := 0
 			//pubs.rwmux.RLock()
-			pubs.mux.Lock()
+			// pubs.mux.Lock()
 			for pub_name, pub := range pubs.list {
 				pub.mux.Lock()
 				if len(pub.addresses) == 0 {
@@ -169,10 +179,10 @@ loop:
 				}
 				pub.mux.Unlock()
 			}
-			pubs.mux.Unlock()
+			// pubs.mux.Unlock()
 			//pubs.rwmux.RUnlock()
 			if len(empty_pubs) != 0 {
-				servStatus.setPubsStatus(false)
+				pubs.servstatus.setPubsStatus(false)
 				pubs.l.Warning("publishersWorker", suckutils.ConcatTwo("no publishers with names: ", strings.Join(empty_pubs, ", ")))
 				message := make([]byte, 1, 1+empty_pubs_len+len(empty_pubs))
 				message[0] = byte(configuratortypes.OperationCodeSubscribeToServices)
@@ -184,7 +194,7 @@ loop:
 					pubs.l.Error("Publishers", errors.New(suckutils.ConcatTwo("sending subscription to configurator error: ", err.Error())))
 				}
 			} else {
-				servStatus.setPubsStatus(true)
+				pubs.servstatus.setPubsStatus(true)
 			}
 
 		}
@@ -192,8 +202,8 @@ loop:
 }
 
 func (pubs *publishers) GetAllPubNames() []ServiceName {
-	pubs.mux.Lock()
-	defer pubs.mux.Unlock()
+	// pubs.mux.Lock()
+	// defer pubs.mux.Unlock()
 	res := make([]ServiceName, 0, len(pubs.list))
 	for pubname := range pubs.list {
 		res = append(res, pubname)
@@ -205,14 +215,14 @@ func (pubs *publishers) Get(servicename ServiceName) *Publisher {
 	if pubs == nil {
 		return nil
 	}
-	pubs.mux.Lock()
-	defer pubs.mux.Unlock()
+	// pubs.mux.Lock()
+	// defer pubs.mux.Unlock()
 	return pubs.list[servicename]
 }
 
 func (pubs *publishers) newPublisher(name ServiceName) (*Publisher, error) {
-	pubs.mux.Lock()
-	defer pubs.mux.Unlock()
+	// pubs.mux.Lock()
+	// defer pubs.mux.Unlock()
 
 	if len(name) == 0 {
 		return nil, errors.New("empty pubname")
