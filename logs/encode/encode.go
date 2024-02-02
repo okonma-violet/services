@@ -14,7 +14,7 @@ const (
 )
 
 const TagsMaxLength = 65535
-const time_layout = " [01/02 15:04:05.000000] "
+const time_layout = " [02/01 15:04:05.000000] "
 
 var byteOrder binary.ByteOrder = binary.LittleEndian
 

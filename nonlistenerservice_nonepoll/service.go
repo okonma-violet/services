@@ -25,10 +25,6 @@ type flagger interface {
 	InitFlags()
 }
 
-type closer interface {
-	Close(logger.Logger) error
-}
-
 type config_serv struct {
 	ConfiguratorAddr string
 }
@@ -37,6 +33,7 @@ type NLService interface {
 	// YOU MUST LISTEN TO routinectx.Done() AND RETURN WHEN IT SHOTS!!!  routinectx - sub of rootctx.
 	// Returning non-nil error -> shutdown program. If you want to terminate without err catched - return ErrSoftTermination
 	DoJob(routinectx context.Context, logger logger.Logger) error
+	Close(logger.Logger) error
 }
 
 // Want to use flags - write func InitFlags() for Servicier.
@@ -67,8 +64,10 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 	// как изящнее сделать не придумал еще
 	var execut *executor
 	var cnfgr *configurator
+	var cnfgr_ctx_cancel context.CancelFunc
 	var workersdata NLService
 	var err error
+
 	if *nocnf {
 		if len(publishers_names) != 0 {
 			panic(errors.New("you cant use lib's publishers in confless mode"))
@@ -77,6 +76,7 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 		if err != nil {
 			panic(err)
 		}
+		cnfgr_ctx_cancel = func() {}
 		execut = newExecutor(ctx, l, workthreads, workersdata)
 		execut.run()
 		cnfgr = &configurator{terminationByConfigurator: make(chan struct{})}
@@ -95,7 +95,10 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 			panic(err)
 		}
 		execut = newExecutor(ctx, l, workthreads, workersdata)
-		cnfgr = newConfigurator(ctx, l.NewSubLogger("configurator"), execut, servStatus, pubs, servconf.ConfiguratorAddr, servicename, time.Second*5)
+
+		var cnfgr_ctx context.Context
+		cnfgr_ctx, cnfgr_ctx_cancel = context.WithCancel(context.Background())
+		cnfgr = newConfigurator(cnfgr_ctx, l.NewSubLogger("configurator"), execut, servStatus, pubs, servconf.ConfiguratorAddr, servicename, time.Second*5)
 
 		servStatus.setOnSuspendFunc(cnfgr.onSuspend)
 		servStatus.setOnUnSuspendFunc(cnfgr.onUnSuspend)
@@ -116,12 +119,10 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 		break
 	}
 
-	if closehandler, ok := workersdata.(closer); ok {
-		if err = closehandler.Close(l.NewSubLogger("Closer")); err != nil {
-			l.Error("Closer", err)
-		}
+	if err = workersdata.Close(l.NewSubLogger("Closer")); err != nil {
+		l.Error("Closer", err)
 	}
-
+	cnfgr_ctx_cancel()
 	flsh.Close()
 	flsh.DoneWithTimeout(time.Second * 5)
 }

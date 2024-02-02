@@ -36,7 +36,7 @@ func (s *service) DoJob(ctx context.Context, l logger.Logger) error {
 }
 
 // may be omitted
-func (s *service) Close() error {
+func (s *service) Close(l logger.Logger) error {
 	return nil
 }
 

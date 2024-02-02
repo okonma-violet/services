@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/big-larry/suckutils"
+	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/epolllistener"
 	"github.com/okonma-violet/services/logs/logger"
 	"github.com/okonma-violet/services/types/configuratortypes"
@@ -78,6 +79,7 @@ func (lninfo *listener_info) HandleNewConn(conn net.Conn) {
 	state, ok := lninfo.servs.list[name]
 	if !ok {
 		lninfo.l.Warning("HandleNewConn", suckutils.Concat("unknown service trying to connect: ", string(name)))
+		conn.Write(basicmessage.FormatBasicMessage([]byte{byte(configuratortypes.OperationCodeNOTOK)})) // TODO: костыль, переделать
 		conn.Close()
 		return
 	}

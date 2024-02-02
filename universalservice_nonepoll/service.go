@@ -73,7 +73,8 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 
 	ln := newListener(ctx, l, servStatus, handlethreads, handler)
 
-	configurator := newConfigurator(ctx, l.NewSubLogger("configurator"), servStatus, pubs, ln, servconf.ConfiguratorAddr, servicename, time.Second*5)
+	cnfgr_ctx, cnfgr_ctx_cancel := context.WithCancel(context.Background())
+	configurator := newConfigurator(cnfgr_ctx, l.NewSubLogger("configurator"), servStatus, pubs, ln, servconf.ConfiguratorAddr, servicename, time.Second*5)
 
 	//ln.configurator = configurator
 	servStatus.setOnSuspendFunc(configurator.onSuspend)
@@ -96,6 +97,7 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 		}
 	}
 
+	cnfgr_ctx_cancel()
 	flsh.Close()
 	flsh.DoneWithTimeout(time.Second * 5)
 }
