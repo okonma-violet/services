@@ -15,6 +15,7 @@ import (
 
 // read this from configfile
 type config struct {
+	ASsad       string
 	exampleflag bool
 }
 
@@ -46,7 +47,7 @@ func (s *service) HandleHTTP(r *suckhttp.Request, l logger.Logger) (*suckhttp.Re
 	return nil, nil                       // = 500 response
 	return nil, errors.New("example err") // logs both returned err and possible conn.Write() err
 	return suckhttp.NewResponse(200, "OK"), nil
-	return suckhttp.NewResponse(400, "Bad Request"), errors.New("example err") // this response wil be sent, err will be logged
+	return suckhttp.NewResponse(400, "Bad Request"), errors.New("example err") // this response will be sent, err will be logged
 }
 
 func (s *service) HandleBasic(m *basicmessage.BasicMessage, l logger.Logger) (*basicmessage.BasicMessage, error) {
