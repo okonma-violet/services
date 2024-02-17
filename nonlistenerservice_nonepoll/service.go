@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"os"
-	"os/signal"
 
-	"syscall"
 	"time"
 
 	"github.com/okonma-violet/confdecoder"
@@ -27,6 +24,7 @@ type flagger interface {
 
 type config_serv struct {
 	ConfiguratorAddr string
+	LogsPath         string
 }
 
 type NLService interface {
@@ -49,17 +47,32 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 	}
 
 	nocnf := flag.Bool("confless", false, "run without configurator (in this mode you can't use lib's publishers)")
+	dbgramusage := flag.Bool("ramusage", false, "prints ram usage stat (print stats by interval and on exit)")
+	dbrramusageticksec := flag.Float64("ramusage-interval", 5.0, "sets interval for \"-ramusage\" in (float) seconds, default is 5.0s")
 	flag.IntVar(&workthreads, "threads", workthreads, "rewrites built threads number")
 	flag.Parse()
+
+	var flsh logger.LogsFlusher
+	if servconf.LogsPath == "" {
+		flsh = logger.NewFlusher(encode.DebugLevel)
+		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file)")
+	} else {
+		logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(servicename))
+		defer logfile.Close()
+		flsh = logger.NewFlusher(encode.DebugLevel, logfile)
+		encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+	}
+	l := flsh.NewLogsContainer(string(servicename))
+
+	var memstat_ch chan struct{}
+	if *dbgramusage {
+		memstat_ch = make(chan struct{})
+		go ramusagewatcher(l, *dbrramusageticksec, memstat_ch)
+	}
 
 	if !*nocnf && servconf.ConfiguratorAddr == "" {
 		panic("ConfiguratorAddr in config.txt not specified")
 	}
-
-	ctx, cancel := createContextWithInterruptSignal()
-
-	flsh := logger.NewFlusher(encode.DebugLevel)
-	l := flsh.NewLogsContainer(string(servicename))
 
 	// как изящнее сделать не придумал еще
 	var execut *executor
@@ -67,6 +80,8 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 	var cnfgr_ctx_cancel context.CancelFunc
 	var workersdata NLService
 	var err error
+
+	ctx, cancel := createContextWithInterruptSignal()
 
 	if *nocnf {
 		if len(publishers_names) != 0 {
@@ -123,20 +138,12 @@ func InitNewService(servicename ServiceName, config Servicier, workthreads int, 
 		l.Error("Closer", err)
 	}
 	cnfgr_ctx_cancel()
+
+	if *dbgramusage {
+		<-memstat_ch // to go to exit procedures
+		<-memstat_ch // to release grt
+	}
+
 	flsh.Close()
 	flsh.DoneWithTimeout(time.Second * 5)
 }
-
-func createContextWithInterruptSignal() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-stop
-		cancel()
-	}()
-	return ctx, cancel
-}
-
-//func handler(ctx context.Context, conn net.Conn) error

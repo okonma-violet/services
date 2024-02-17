@@ -3,10 +3,7 @@ package universalservice_nonepoll
 import (
 	"context"
 	"flag"
-	"os"
-	"os/signal"
 
-	"syscall"
 	"time"
 
 	"github.com/okonma-violet/confdecoder"
@@ -26,6 +23,7 @@ type Closer interface {
 
 type config_base struct {
 	ConfiguratorAddr string
+	LogsPath         string
 }
 
 // NON-EPOLL.
@@ -42,20 +40,31 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	if flagsin, ok := config.(flagger); ok {
 		flagsin.InitFlags()
 	}
+
+	dbgramusage := flag.Bool("ramusage", false, "prints ram usage stat (print stats by interval and on exit)")
+	dbrramusageticksec := flag.Float64("ramusage-interval", 5.0, "sets interval for \"-ramusage\" in (float) seconds, default is 5.0s")
 	flag.IntVar(&handlethreads, "threads", handlethreads, "rewrites built threads number")
 	flag.Parse()
 
-	ctx, cancel := createContextWithInterruptSignal()
-
-	flsh := logger.NewFlusher(encode.DebugLevel)
+	var flsh logger.LogsFlusher
+	if servconf.LogsPath == "" {
+		flsh = logger.NewFlusher(encode.DebugLevel)
+		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file)")
+	} else {
+		logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(servicename))
+		defer logfile.Close()
+		flsh = logger.NewFlusher(encode.DebugLevel, logfile)
+		encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+	}
 	l := flsh.NewLogsContainer(string(servicename))
 
-	servStatus := newServiceStatus()
+	var memstat_ch chan struct{}
+	if *dbgramusage {
+		memstat_ch = make(chan struct{})
+		go ramusagewatcher(l, *dbrramusageticksec, memstat_ch)
+	}
 
-	// Connector here is only needed for configurator
-	// if err := connector.SetupGopoolHandling(handlethreads, 1, handlethreads); err != nil {
-	// 	panic(err)
-	// }
+	servStatus := newServiceStatus()
 
 	var pubs *publishers
 	var err error
@@ -66,6 +75,8 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	} else {
 		servStatus.setPubsStatus(true)
 	}
+
+	ctx, cancel := createContextWithInterruptSignal()
 	handler, clsr, err := config.PrepareHandling(ctx, pubs)
 	if err != nil {
 		panic(err)
@@ -98,20 +109,12 @@ func InitNewService(servicename ServiceName, config HandleCreator, handlethreads
 	}
 
 	cnfgr_ctx_cancel()
+
+	if *dbgramusage {
+		<-memstat_ch // to go to exit procedures
+		<-memstat_ch // to release grt
+	}
+
 	flsh.Close()
 	flsh.DoneWithTimeout(time.Second * 5)
 }
-
-func createContextWithInterruptSignal() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-stop
-		cancel()
-	}()
-	return ctx, cancel
-}
-
-//func handler(ctx context.Context, conn net.Conn) error

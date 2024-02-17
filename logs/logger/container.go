@@ -11,7 +11,7 @@ type LogsContainer struct {
 	tags []byte //tags
 }
 
-func (f *Flusher) NewLogsContainer(tags ...string) Logger {
+func (f *flusher) NewLogsContainer(tags ...string) Logger {
 	tagslist := encode.AppendTags(nil, tags...)
 	return &LogsContainer{ch: f.ch, tags: tagslist}
 }

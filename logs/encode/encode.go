@@ -2,6 +2,8 @@ package encode
 
 import (
 	"encoding/binary"
+	"io"
+	"os"
 	"time"
 
 	"github.com/big-larry/suckutils"
@@ -75,15 +77,33 @@ func DecodeToString(log []byte) string {
 	}
 	return suckutils.Concat(string(TagStartSep), LogType(log[0]).String(), string(TagEndSep), time.UnixMicro(int64(byteOrder.Uint64(log[1:9]))).Format(time_layout), string(log[11:]))
 }
+func DecodeToStringLn(log []byte) string {
+	if len(log) < 11 {
+		panic("logs/encode/DecodeToString() recieved log with len less than 11") // TODO:?
+	}
+	return suckutils.Concat(string(TagStartSep), LogType(log[0]).String(), string(TagEndSep), time.UnixMicro(int64(byteOrder.Uint64(log[1:9]))).Format(time_layout), string(log[11:]), "\n")
+}
 func DecodeToStringColorized(log []byte) string {
 	if len(log) < 11 {
 		panic("logs/encode/DecodeToString() recieved log with len less than 11") // TODO:?
 	}
 	return suckutils.Concat(LogType(log[0]).Colorize(), string(TagStartSep), LogType(log[0]).String(), string(TagEndSep), ColorWhite, time.UnixMicro(int64(byteOrder.Uint64(log[1:9]))).Format(time_layout), string(log[11:]))
 }
+func DecodeToStringColorizedLn(log []byte) string {
+	if len(log) < 11 {
+		panic("logs/encode/DecodeToString() recieved log with len less than 11") // TODO:?
+	}
+	return suckutils.Concat(LogType(log[0]).Colorize(), string(TagStartSep), LogType(log[0]).String(), string(TagEndSep), ColorWhite, time.UnixMicro(int64(byteOrder.Uint64(log[1:9]))).Format(time_layout), string(log[11:]), "\n")
+}
 
-func PrintLog(log []byte) {
-	println(DecodeToStringColorized(log))
+func PrintLog(w io.Writer, log []byte) {
+	io.WriteString(os.Stdout, DecodeToStringColorizedLn(log))
+	if w != nil {
+		if _, err := io.WriteString(w, DecodeToStringLn(log)); err != nil {
+			panic("err writing log: " + DecodeToString(log) + "; err: " + err.Error())
+		}
+	}
+	//println(DecodeToStringColorized(log))
 }
 
 func Println(logtype byte, log string) {
