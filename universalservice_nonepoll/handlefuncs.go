@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/big-larry/suckhttp"
+	"github.com/big-larry/suckutils"
 	"github.com/okonma-violet/services/basicmessage"
 	"github.com/okonma-violet/services/basicmessage/basicmessagetypes"
 	"github.com/okonma-violet/services/logs/logger"
@@ -31,13 +32,17 @@ func CreateHTTPHandleFunc(h httpmsghandler) BaseHandleFunc {
 		if err != nil {
 			return err
 		}
+		l.Debug("handle", "new req for "+request.Uri.Path)
 		response, err := h.HandleHTTP(request, l)
 		if response == nil {
 			response = suckhttp.NewResponse(500, "Internal Server Error")
 		}
+		stcode, _ := response.GetStatus()
+		l.Debug("handle", suckutils.Concat("req handled, resp code:", suckutils.Itoa(uint32(stcode))))
+
 		if err != nil {
 			if writeErr := response.Write(conn, time.Minute); writeErr != nil {
-				l.Error("Write", writeErr)
+				l.Error("handle/Write", writeErr)
 			}
 			return err
 		}
@@ -51,13 +56,15 @@ func CreateBasicHandleFunc(h basicmsghandler) BaseHandleFunc {
 		if err != nil {
 			return err
 		}
+		l.Debug("handle", "new req")
 		responsemsg, err := h.HandleBasic(requestmsg, l)
 		if responsemsg == nil {
 			responsemsg = &basicmessage.BasicMessage{Payload: []byte{byte(basicmessagetypes.OperationCodeInternalServerError)}}
 		}
+		l.Debug("handle", "req handled")
 		if err != nil {
 			if _, writeErr := conn.Write(responsemsg.ToByte()); writeErr != nil {
-				l.Error("Write", writeErr)
+				l.Error("handle/Write", writeErr)
 			}
 			return err
 		}

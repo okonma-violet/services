@@ -30,8 +30,8 @@ type listener struct {
 	sync.Mutex
 }
 
-const handlerCallTimeout time.Duration = time.Second * 5
-const handlerCallMaxExceededTimeouts = 3
+const handlerCallTimeout time.Duration = time.Second * 30
+const handlerCallMaxExceededTimeouts = 2
 const threadKillingTimeout time.Duration = time.Second * 3
 
 func newListener(ctx context.Context, l logger.Logger, servStatus *serviceStatus, threads int, handler BaseHandleFunc) *listener {
@@ -104,6 +104,7 @@ func (listener *listener) acceptWorker(ctx context.Context) {
 	timer := time.NewTimer(handlerCallTimeout)
 	var err error
 	var conn net.Conn
+	var itr time.Duration
 loop:
 	for {
 		select {
@@ -127,44 +128,52 @@ loop:
 				conn.Close()
 				continue loop
 			}
-			for {
-				var i time.Duration
-				if !timer.Stop() {
-					<-timer.C
-				}
-				timer.Reset(handlerCallTimeout)
-				select {
-				case <-timer.C:
-					if i += 1; i > handlerCallMaxExceededTimeouts {
-						listener.l.Warning("acceptWorker", suckutils.ConcatThree("exceeded max timeout, no free handlingWorker available for ", (handlerCallTimeout*i).String(), ", close connection"))
-						conn.Close()
+
+			select {
+			case connsToHandle <- conn:
+				continue loop
+
+			default:
+				itr = 0
+				for {
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(handlerCallTimeout)
+					select {
+					case <-timer.C:
+						if itr += 1; itr >= handlerCallMaxExceededTimeouts {
+							listener.l.Warning("acceptWorker", suckutils.ConcatThree("exceeded max timeout, no free handlingWorker available for ", (handlerCallTimeout*itr).String(), ", close connection"))
+							conn.Close()
+							continue loop
+						}
+						listener.l.Warning("acceptWorker", suckutils.ConcatTwo("exceeded timeout, no free handlingWorker available for ", (handlerCallTimeout*itr).String()))
+					case connsToHandle <- conn:
 						continue loop
 					}
-					listener.l.Warning("acceptWorker", suckutils.ConcatTwo("exceeded timeout, no free handlingWorker available for ", (handlerCallTimeout*i).String()))
-				case connsToHandle <- conn:
-					continue loop
 				}
 			}
+
 		}
 	}
 	<-listener.accepting
 }
 
 func (listener *listener) handlingWorker(connsToHandle chan net.Conn) {
-	ll := listener.l.NewSubLogger("Handle")
+	var cnt uint32
 	for conn := range connsToHandle {
-		listener.l.Debug("handlingWorker", "new request from "+conn.RemoteAddr().String())
-
+		cnt++
+		ll := listener.l.NewSubLogger(suckutils.Concat("req:", suckutils.Itoa(cnt), "-", conn.RemoteAddr().String()))
 		if listener.pool != nil {
 			listener.pool.Schedule(func() {
 				if err := listener.handler(ll, conn); err != nil {
-					listener.l.Error("handlingWorker/handle", errors.New(suckutils.ConcatThree(conn.RemoteAddr().String(), ", err: ", err.Error())))
+					ll.Error("handlingWorker/handle", err)
 				}
 				conn.Close()
 			})
 		} else {
 			if err := listener.handler(ll, conn); err != nil {
-				listener.l.Error("handlingWorker/handle", errors.New(suckutils.ConcatThree(conn.RemoteAddr().String(), ", err: ", err.Error())))
+				ll.Error("handlingWorker/handle", err)
 			}
 			conn.Close()
 		}
@@ -192,11 +201,11 @@ func (listener *listener) close() {
 	}
 }
 
-func (listener *listener) onAir() bool {
-	listener.Lock()
-	defer listener.Unlock()
-	return listener.ln != nil
-}
+// func (listener *listener) onAir() bool {
+// 	listener.Lock()
+// 	defer listener.Unlock()
+// 	return listener.ln != nil
+// }
 
 func (listener *listener) Addr() (string, string) {
 	if listener == nil {
