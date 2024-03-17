@@ -29,7 +29,7 @@ type config_base struct {
 // NON-EPOLL.
 // example of usage: ../blank_services/universalservice/
 
-func InitNewService(servicename ServiceName, config HandleCreator, handlethreads int, publishers_names ...ServiceName) {
+func InitNewService(servicename ServiceName, config handleCreator, handlethreads int, publishers_names ...ServiceName) {
 	servconf := &config_base{}
 	if err := confdecoder.DecodeFile("config.txt", servconf, config); err != nil {
 		panic("reading/decoding config.txt err: " + err.Error())

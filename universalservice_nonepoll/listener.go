@@ -18,7 +18,7 @@ type listener struct {
 	ln      net.Listener
 	handler BaseHandleFunc
 
-	pool *dynamicworkerspool.Pool
+	pool dynamicworkerspool.GrtPooler
 
 	servStatus *serviceStatus
 	l          logger.Logger
@@ -32,7 +32,7 @@ type listener struct {
 
 const handlerCallTimeout time.Duration = time.Second * 30
 const handlerCallMaxExceededTimeouts = 2
-const threadKillingTimeout time.Duration = time.Second * 3
+const threadKillingTimeout time.Duration = time.Second * 5
 
 func newListener(ctx context.Context, l logger.Logger, servStatus *serviceStatus, threads int, handler BaseHandleFunc) *listener {
 	if threads < 1 {
@@ -121,6 +121,7 @@ loop:
 			}
 			conn, err = listener.ln.Accept()
 			if err != nil {
+				listener.l.Error("acceptWorker", errors.New(suckutils.ConcatTwo("ln.Accept() err: ", err.Error())))
 				continue loop
 			}
 			if !listener.servStatus.onAir() {
@@ -129,25 +130,28 @@ loop:
 				continue loop
 			}
 
+			if !timer.Stop() {
+				<-timer.C
+			}
+			timer.Reset(handlerCallTimeout)
+
 			select {
 			case connsToHandle <- conn:
 				continue loop
-
 			default:
 				itr = 0
 				for {
-					if !timer.Stop() {
-						<-timer.C
-					}
-					timer.Reset(handlerCallTimeout)
 					select {
 					case <-timer.C:
 						if itr += 1; itr >= handlerCallMaxExceededTimeouts {
 							listener.l.Warning("acceptWorker", suckutils.ConcatThree("exceeded max timeout, no free handlingWorker available for ", (handlerCallTimeout*itr).String(), ", close connection"))
 							conn.Close()
+							timer.Reset(handlerCallTimeout)
 							continue loop
 						}
 						listener.l.Warning("acceptWorker", suckutils.ConcatTwo("exceeded timeout, no free handlingWorker available for ", (handlerCallTimeout*itr).String()))
+						timer.Reset(handlerCallTimeout)
+
 					case connsToHandle <- conn:
 						continue loop
 					}
@@ -163,19 +167,19 @@ func (listener *listener) handlingWorker(connsToHandle chan net.Conn) {
 	var cnt uint32
 	for conn := range connsToHandle {
 		cnt++
-		ll := listener.l.NewSubLogger(suckutils.Concat("req:", suckutils.Itoa(cnt), "-", conn.RemoteAddr().String()))
+		ll := listener.l.NewSubLogger(suckutils.ConcatThree(suckutils.Itoa(cnt), "-", conn.RemoteAddr().String()))
 		if listener.pool != nil {
 			listener.pool.Schedule(func() {
 				if err := listener.handler(ll, conn); err != nil {
-					ll.Error("handlingWorker/handle", err)
+					ll.Error("ListenerHandlingWorker/handle", err)
 				}
-				conn.Close()
+				// conn.Close() //closes inside handler()
 			})
 		} else {
 			if err := listener.handler(ll, conn); err != nil {
-				ll.Error("handlingWorker/handle", err)
+				ll.Error("ListenerHandlingWorker/handle", err)
 			}
-			conn.Close()
+			// conn.Close() //closes inside handler()
 		}
 	}
 }
