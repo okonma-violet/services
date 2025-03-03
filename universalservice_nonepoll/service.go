@@ -24,12 +24,33 @@ type Closer interface {
 type config_base struct {
 	ConfiguratorAddr string
 	LogsPath         string
+	ServiceName      string
 }
 
 // NON-EPOLL.
 // example of usage: ../blank_services/universalservice/
 
+func InitNewServiceWithoutName(config handleCreator, handlethreads int, publishers_names ...ServiceName) {
+	servconf := &config_base{}
+	if err := confdecoder.DecodeFile("config.txt", servconf, config); err != nil {
+		panic("reading/decoding config.txt err: " + err.Error())
+	}
+	if servconf.ServiceName == "" {
+		panic("ServiceName in config.txt not specified")
+	}
+	if servconf.ConfiguratorAddr == "" {
+		panic("ConfiguratorAddr in config.txt not specified")
+	}
+	if flagsin, ok := config.(flagger); ok {
+		flagsin.InitFlags()
+	}
+	initNewService(servconf, ServiceName(servconf.ServiceName), config, handlethreads, publishers_names...)
+}
+
 func InitNewService(servicename ServiceName, config handleCreator, handlethreads int, publishers_names ...ServiceName) {
+	if servicename == "" {
+		panic("servicename is not specified")
+	}
 	servconf := &config_base{}
 	if err := confdecoder.DecodeFile("config.txt", servconf, config); err != nil {
 		panic("reading/decoding config.txt err: " + err.Error())
@@ -40,7 +61,10 @@ func InitNewService(servicename ServiceName, config handleCreator, handlethreads
 	if flagsin, ok := config.(flagger); ok {
 		flagsin.InitFlags()
 	}
+	initNewService(servconf, servicename, config, handlethreads, publishers_names...)
+}
 
+func initNewService(servconf *config_base, servicename ServiceName, config handleCreator, handlethreads int, publishers_names ...ServiceName) {
 	dbgramusage := flag.Bool("ramusage", false, "prints ram usage stat (print stats by interval and on exit)")
 	dbrramusageticksec := flag.Float64("ramusage-interval", 5.0, "sets interval for \"-ramusage\" in (float) seconds, default is 5.0s")
 	flag.IntVar(&handlethreads, "threads", handlethreads, "rewrites built threads number")
@@ -49,7 +73,7 @@ func InitNewService(servicename ServiceName, config handleCreator, handlethreads
 	var flsh logger.LogsFlusher
 	if servconf.LogsPath == "" {
 		flsh = logger.NewFlusher(encode.DebugLevel)
-		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file)")
+		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file, dont forget to create that dir)")
 	} else {
 		logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(servicename))
 		defer logfile.Close()

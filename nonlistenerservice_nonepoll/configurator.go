@@ -19,8 +19,8 @@ import (
 )
 
 type configurator struct {
-	conn            *connectornonepoll.NonEpollReConnector[basicmessage.BasicMessage, *basicmessage.BasicMessage]
-	thisServiceName ServiceName
+	conn *connectornonepoll.NonEpollReConnector[basicmessage.BasicMessage, *basicmessage.BasicMessage]
+	// thisServiceName ServiceName
 
 	publishers *publishers
 	servStatus *serviceStatus
@@ -37,10 +37,9 @@ const conf_ReadTimeout time.Duration = time.Second * 5
 const conf_DialTimeout time.Duration = time.Second * 2
 const conf_ReconnectTimeout time.Duration = time.Second * 2
 
-func newConfigurator(ctx context.Context, l logger.Logger, execut *executor, servStatus *serviceStatus, pubs *publishers, configuratoraddr string, thisServiceName ServiceName, reconnectTimeout time.Duration) *configurator {
+func newConfigurator(ctx context.Context, l logger.Logger, execut *executor, servStatus *serviceStatus, pubs *publishers, configuratoraddr string, reconnectTimeout time.Duration) *configurator {
 
 	c := &configurator{
-		thisServiceName:           thisServiceName,
 		l:                         l,
 		servStatus:                servStatus,
 		publishers:                pubs,
@@ -110,7 +109,7 @@ func (c *configurator) onUnSuspend() {
 }
 
 func (c *configurator) handshake(conn net.Conn) error {
-	if _, err := conn.Write(basicmessage.FormatBasicMessage([]byte(c.thisServiceName))); err != nil {
+	if _, err := conn.Write(basicmessage.FormatBasicMessage([]byte(thisServiceName))); err != nil {
 		c.l.Error("Conn/handshake", errors.New(suckutils.ConcatTwo("Write() err: ", err.Error())))
 		return err
 	}

@@ -33,7 +33,8 @@ func newExecutor(rootctx context.Context, l logger.Logger, threads int, workersd
 	if threads < 1 {
 		panic("threads must not be less than 1")
 	}
-	return &executor{rootctx: rootctx,
+	return &executor{
+		rootctx:            rootctx,
 		l:                  l,
 		active_workers:     make(chan struct{}, threads),
 		workersdata:        workersdata,
