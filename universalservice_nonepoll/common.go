@@ -26,14 +26,6 @@ func createContextWithInterruptSignal() (context.Context, context.CancelFunc) {
 
 // can panic
 func createLogFileAt(path, servicename string) (*os.File, string) {
-	stat, err := os.Stat(path)
-	if err != nil {
-		panic("os.Stat err on LogsPath: " + err.Error())
-	}
-	if !stat.IsDir() {
-		panic("LogsPath is not a directory")
-	}
-
 	// stat, err = os.Stat(path)
 	// if err != nil {
 	// 	if !os.IsNotExist(err) {

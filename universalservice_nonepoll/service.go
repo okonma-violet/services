@@ -2,7 +2,9 @@ package universalservice_nonepoll
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"os"
 
 	"time"
 
@@ -75,10 +77,24 @@ func initNewService(servconf *config_base, servicename ServiceName, config handl
 		flsh = logger.NewFlusher(encode.DebugLevel)
 		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file, dont forget to create that dir)")
 	} else {
-		logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(servicename))
-		defer logfile.Close()
-		flsh = logger.NewFlusher(encode.DebugLevel, logfile)
-		encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+		stat, err := os.Stat(servconf.LogsPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				flsh = logger.NewFlusher(encode.DebugLevel)
+				encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file, dont forget to create that dir)")
+			} else {
+				panic("os.Stat err on LogsPath: " + err.Error())
+			}
+		} else {
+			if !stat.IsDir() {
+				panic("LogsPath is not a directory")
+			}
+			logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(servicename))
+			defer logfile.Close()
+			flsh = logger.NewFlusher(encode.DebugLevel, logfile)
+			encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+		}
+
 	}
 	l := flsh.NewLogsContainer(string(servicename))
 

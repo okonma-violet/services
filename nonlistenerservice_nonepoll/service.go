@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"os"
 
 	"time"
 
@@ -88,10 +89,24 @@ func initNewService(servconf *config_base, config Servicier, workthreads int, pu
 		flsh = logger.NewFlusher(encode.DebugLevel)
 		encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file)")
 	} else {
-		logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(thisServiceName))
-		defer logfile.Close()
-		flsh = logger.NewFlusher(encode.DebugLevel, logfile)
-		encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+		stat, err := os.Stat(servconf.LogsPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				flsh = logger.NewFlusher(encode.DebugLevel)
+				encode.Println(encode.Warning.Byte(), "writing logs to stdout only (you can set \"LogsPath\" in config file)")
+			} else {
+				panic("os.Stat err on LogsPath: " + err.Error())
+			}
+		} else {
+			if !stat.IsDir() {
+				panic("LogsPath is not a directory")
+			}
+			logfile, logfilepath := createLogFileAt(servconf.LogsPath, string(thisServiceName))
+			defer logfile.Close()
+			flsh = logger.NewFlusher(encode.DebugLevel, logfile)
+			encode.Println(encode.Info.Byte(), "created logfile at "+logfilepath)
+		}
+
 	}
 	l := flsh.NewLogsContainer(string(thisServiceName))
 
@@ -161,6 +176,7 @@ func initNewService(servconf *config_base, config Servicier, workthreads int, pu
 		break
 	}
 
+	// TODO: ADD WAITING EXEC ROUTINES EXITS
 	if err = workersdata.Close(l.NewSubLogger("Closer")); err != nil {
 		l.Error("Closer", err)
 	}
